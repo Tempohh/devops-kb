@@ -17739,7 +17739,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18414,7 +18414,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18458,7 +18458,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18483,7 +18483,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18868,7 +18868,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24823,26 +24823,26 @@
 <h1 id="disaster-recovery">Disaster Recovery<a class="headerlink" href="#disaster-recovery" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Il disaster recovery per Kafka riguarda la capacità di sopravvivere alla perdita di un intero cluster o datacenter, con perdita di dati e downtime controllati. Kafka non è un database con backup tradizionale: la strategia principale è la <strong>geo-replicazione</strong> tramite <strong>MirrorMaker 2</strong> che mantiene un cluster secondario sincronizzato. La preparazione è fondamentale — il DR non improvvisato non funziona.</p>
-<p><strong>RPO (Recovery Point Objective):</strong> Quanti dati possiamo perdere? Con MirrorMaker 2 ben configurato, il RPO è tipicamente &lt; 1 minuto.</p>
-<p><strong>RTO (Recovery Time Objective):</strong> Quanto tempo ci vuole per ripristinare? Con una procedura documentata e testata, l'RTO può essere di pochi minuti.</p>
+<p><strong>RPO (Recovery Point Objective):</strong> Quanti dati possiamo perdere? MM2 replica in modo asincrono: il RPO coincide con il lag di replicazione, tipicamente secondi ma non garantito. Va misurato (metrica <code>replication-latency-ms</code>, heartbeat), non assunto.</p>
+<p><strong>RTO (Recovery Time Objective):</strong> Quanto tempo ci vuole per ripristinare? Con una procedura documentata, automatizzata e testata l'RTO può essere di pochi minuti; senza drill è imprevedibile (client da ripuntare, offset da verificare).</p>
 <h2 id="concetti-chiave">Concetti Chiave<a class="headerlink" href="#concetti-chiave" title="Permanent link">&para;</a></h2>
 <p><strong>MirrorMaker 2 (MM2)</strong> — Il tool ufficiale Kafka per la replicazione cross-cluster. È un'applicazione Kafka Connect che usa il framework Connect per replicare topic, consumer group offsets e metadati tra cluster.</p>
 <p><strong>Active-Passive</strong> — Un cluster primario (attivo) e uno secondario (standby). Il secondario riceve i dati ma non serve client. In caso di disaster, il secondario viene promosso a primario.</p>
 <p><strong>Active-Active</strong> — Entrambi i cluster servono client. MM2 replica bidirezionalmente. Richiede gestione dei conflitti e topic naming convention per evitare loop di replicazione.</p>
-<p><strong>Offset Translation</strong> — Gli offset nel cluster sorgente non corrispondono agli offset nel cluster destinazione. MM2 mantiene una mappatura degli offset tradotti nel topic <code>mm2-offsets</code>.</p>
+<p><strong>Offset Translation</strong> — Gli offset nel cluster sorgente non corrispondono agli offset nel cluster destinazione. MM2 scrive la mappatura nel topic interno <code>mm2-offset-syncs.&lt;alias&gt;.internal</code> (cluster sorgente) e i checkpoint dei consumer group, già tradotti, in <code>&lt;alias&gt;.checkpoints.internal</code> nel cluster destinazione (es. <code>primary.checkpoints.internal</code>). Li produce il <code>MirrorCheckpointConnector</code>; si leggono con <code>RemoteClusterUtils.translateOffsets()</code> (<code>MirrorClient</code>).</p>
 <p><strong>Alias dei cluster</strong> — MM2 usa alias per identificare i cluster (es. <code>primary</code>, <code>secondary</code>). I topic replicati vengono prefissati con l'alias sorgente: <code>primary.orders</code> nel cluster secondario.</p>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart LR
     subgraph DC1["Datacenter 1 (Primary)"]
         P[Producers]
-        K1["Kafka Cluster\nPrimary"]
+        K1["Kafka Cluster&lt;br/&gt;Primary"]
         C1[Consumers]
         MM_S["MirrorMaker 2\nSource Connector"]
     end
 
     subgraph DC2["Datacenter 2 (Secondary)"]
-        K2["Kafka Cluster\nSecondary"]
-        C2["Consumers\n(DR Only)"]
+        K2["Kafka Cluster&lt;br/&gt;Secondary"]
+        C2["Consumers&lt;br/&gt;(DR Only)"]
         MM_T["MirrorMaker 2\nDestination"]
     end
 
@@ -24865,30 +24865,38 @@
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Replicazione da primary a secondary</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="na">primary-&gt;secondary.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="na">primary-&gt;secondary.topics</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">.*               # tutti i topic (regex)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="na">primary-&gt;secondary.topics.blacklist</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">.*internal.*, .*_schema_version_.*</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="c1"># Sincronizzazione offset consumer group</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="na">primary-&gt;secondary.sync.group.offsets.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="na">primary-&gt;secondary.sync.group.offsets.interval.seconds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="na">primary-&gt;secondary.emit.offset.syncs.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="c1"># Replicazione bidirezionale (se active-active)</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="na">secondary-&gt;primary.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">false</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="c1"># Heartbeat per monitorare la latenza di replicazione</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="na">primary-&gt;secondary.emit.heartbeats.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="na">primary-&gt;secondary.heartbeats.topic.replication.factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># NB: nei file .properties i commenti vanno su riga propria: a fine riga</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># verrebbero letti come parte del valore.</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Tutti i topic (regex); i topic interni (*.internal, __*) sono esclusi di default</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="na">primary-&gt;secondary.topics</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">.*</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># topics.blacklist è deprecato: usare topics.exclude</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="na">primary-&gt;secondary.topics.exclude</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">.*[</span><span class="se">\-\.</span><span class="s">]internal, .*</span><span class="se">\.</span><span class="s">replica, __.*</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="c1"># Sincronizzazione offset consumer group</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="na">primary-&gt;secondary.sync.group.offsets.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="na">primary-&gt;secondary.sync.group.offsets.interval.seconds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">60</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="na">primary-&gt;secondary.emit.checkpoints.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># Replicazione inversa: false in active-passive, true in active-active</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="na">secondary-&gt;primary.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">false</span>
 </span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="c1"># Dimensionamento</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="na">tasks.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">4</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="na">replication.factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="c1"># Heartbeat per monitorare la latenza di replicazione</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="na">primary-&gt;secondary.emit.heartbeats.enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">true</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="na">primary-&gt;secondary.heartbeats.topic.replication.factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="c1"># Dimensionamento</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="na">tasks.max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">4</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="na">replication.factor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">3</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Sync offset: condizioni</p>
+<p><code>sync.group.offsets.enabled</code> è <strong>false</strong> di default. Anche se attivo, MM2 scrive gli offset tradotti nel cluster destinazione solo per i consumer group <strong>senza membri attivi</strong> lì. Prima del failover i consumer DR devono quindi essere fermi.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Avviare MirrorMaker 2</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>connect-mirror-maker.sh<span class="w"> </span>mm2.properties
 </span></code></pre></div>
 <h3 id="mirrormaker-2-come-kafka-connect-connector">MirrorMaker 2 come Kafka Connect Connector<a class="headerlink" href="#mirrormaker-2-come-kafka-connect-connector" title="Permanent link">&para;</a></h3>
-<p>Per integrare MM2 in un cluster Kafka Connect esistente:</p>
+<p>Per integrare MM2 in un cluster Kafka Connect esistente (meglio vicino al cluster <strong>destinazione</strong>: la lettura attraversa la WAN, la scrittura è locale). I record sono copiati senza deserializzazione, quindi servono i <code>ByteArrayConverter</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># MirrorSourceConnector: replica topic e dati</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://connect:8083/connectors<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
@@ -24901,28 +24909,29 @@
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s1">      "source.cluster.bootstrap.servers": "primary-kafka:9092",</span>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s1">      "target.cluster.bootstrap.servers": "secondary-kafka:9092",</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s1">      "topics": "orders,payments,users",</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">      "tasks.max": "4",</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">      "replication.factor": "3",</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s1">      "source-&gt;target.enabled": "true"</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s1">    }</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s1">  }'</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># MirrorCheckpointConnector: sincronizza consumer group offsets</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://connect:8083/connectors<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="s1">    "name": "mirror-checkpoint-connector",</span>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="s1">    "config": {</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="s1">      "connector.class": "org.apache.kafka.connect.mirror.MirrorCheckpointConnector",</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="s1">      "source.cluster.alias": "primary",</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="s1">      "target.cluster.alias": "secondary",</span>
-</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="s1">      "source.cluster.bootstrap.servers": "primary-kafka:9092",</span>
-</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="s1">      "target.cluster.bootstrap.servers": "secondary-kafka:9092",</span>
-</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="s1">      "groups": ".*",</span>
-</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="s1">      "sync.group.offsets.enabled": "true",</span>
-</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="s1">      "sync.group.offsets.interval.seconds": "60"</span>
-</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="s1">    }</span>
-</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="s1">  }'</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s1">      "key.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s1">      "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s1">      "tasks.max": "4",</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s1">      "replication.factor": "3"</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s1">    }</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s1">  }'</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># MirrorCheckpointConnector: sincronizza consumer group offsets</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://connect:8083/connectors<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="s1">    "name": "mirror-checkpoint-connector",</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="s1">    "config": {</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="s1">      "connector.class": "org.apache.kafka.connect.mirror.MirrorCheckpointConnector",</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="s1">      "source.cluster.alias": "primary",</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="s1">      "target.cluster.alias": "secondary",</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="s1">      "source.cluster.bootstrap.servers": "primary-kafka:9092",</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="s1">      "target.cluster.bootstrap.servers": "secondary-kafka:9092",</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="s1">      "groups": ".*",</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="s1">      "sync.group.offsets.enabled": "true",</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="s1">      "sync.group.offsets.interval.seconds": "60"</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a><span class="s1">    }</span>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="s1">  }'</span>
 </span></code></pre></div>
 <h3 id="procedura-di-failover">Procedura di failover<a class="headerlink" href="#procedura-di-failover" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># ─── FASE 1: Rilevare il disastro ───────────────────────────────────────────</span>
@@ -24930,19 +24939,19 @@
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>primary-kafka:9092<span class="w"> </span>--list
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Se fallisce → procedere con failover</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># ─── FASE 2: Tradurre gli offset ────────────────────────────────────────────</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># MM2 mantiene la mappatura degli offset. Usare lo script di traduzione:</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>./kafka-console-consumer.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span>--topic<span class="w"> </span>mm2-offsets.primary.internal<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">  </span>--from-beginning
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="c1"># Oppure usare l'API MirrorClient per tradurre gli offset automaticamente</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># (disponibile nel connector MirrorCheckpoint)</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># ─── FASE 3: Aggiornare i consumer ──────────────────────────────────────────</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># Puntare i consumer al cluster secondario</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># I consumer group offset sono già sincronizzati da MM2</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># ─── FASE 2: Verificare gli offset tradotti ─────────────────────────────────</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># I checkpoint stanno in primary.checkpoints.internal sul secondario (formato</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># binario: si leggono via MirrorClient/RemoteClusterUtils.translateOffsets,</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># non con il console consumer). Con sync.group.offsets.enabled=true sono già</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># applicati ai consumer group inattivi: controllare che esistano.</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>kafka-consumer-groups.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>--describe<span class="w"> </span>--group<span class="w"> </span>my-consumer-group
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># ─── FASE 3: Aggiornare i consumer ──────────────────────────────────────────</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="c1"># Puntare i consumer al cluster secondario</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="c1"># Gli offset sono già sincronizzati da MM2 (sync attivo e gruppo inattivo).</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="c1"># Il lag residuo dell'ultimo intervallo causa riletture: i consumer devono</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="c1"># essere idempotenti (MM2 è at-least-once).</span>
 </span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="c1"># Se i topic nel secondario hanno il prefisso "primary.":</span>
 </span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="c1"># Aggiornare i consumer per leggere da "primary.orders" invece di "orders"</span>
@@ -24951,11 +24960,13 @@
 </span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="c1"># ─── FASE 4: Aggiornare i producer ──────────────────────────────────────────</span>
 </span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="c1"># Puntare i producer al cluster secondario</span>
 </span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="c1"># bootstrap.servers=secondary-kafka:9092</span>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
-</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="c1"># ─── FASE 5: Verificare ─────────────────────────────────────────────────────</span>
-</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a><span class="w">  </span>--describe<span class="w"> </span>--all-groups
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="c1"># Il failback è un'operazione separata: richiede di replicare in senso inverso</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="c1"># (secondary-&gt;primary) e ritradurre gli offset.</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a><span class="c1"># ─── FASE 5: Verificare ─────────────────────────────────────────────────────</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a><span class="w">  </span>--describe<span class="w"> </span>--all-groups
 </span></code></pre></div>
 <h3 id="evitare-il-prefisso-nei-topic-replicati">Evitare il prefisso nei topic replicati<a class="headerlink" href="#evitare-il-prefisso-nei-topic-replicati" title="Permanent link">&para;</a></h3>
 <p>Per default MM2 aggiunge il prefisso del cluster sorgente. Per evitarlo:</p>
@@ -24964,7 +24975,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">IdentityReplicationPolicy richiede attenzione</p>
-<p>Con la policy di identità, in modalità active-active i topic vengono replicati in loop. Usarla solo con topologie active-passive.</p>
+<p>Senza prefisso MM2 non riconosce i topic già replicati: in active-active i record rimbalzano all'infinito tra i cluster. Usarla solo con topologie active-passive (disponibile da Kafka 3.0).</p>
 </div>
 <h3 id="backup-dei-metadati">Backup dei metadati<a class="headerlink" href="#backup-dei-metadati" title="Permanent link">&para;</a></h3>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Backup della configurazione dei topic</span>
@@ -24977,7 +24988,7 @@
 </span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># Export config broker</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--entity-type<span class="w"> </span>brokers<span class="w"> </span>--describe<span class="w"> </span>--all<span class="w"> </span>&gt;<span class="w"> </span>broker-config-backup.txt
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>--entity-type<span class="w"> </span>brokers<span class="w"> </span>--entity-default<span class="w"> </span>--describe<span class="w"> </span>--all<span class="w"> </span>&gt;<span class="w"> </span>broker-config-backup.txt
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
@@ -24999,7 +25010,7 @@
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="scenario-1-mm2-non-replica-i-nuovi-topic">Scenario 1 — MM2 non replica i nuovi topic<a class="headerlink" href="#scenario-1-mm2-non-replica-i-nuovi-topic" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Un nuovo topic creato nel cluster primario non appare nel cluster secondario dopo diversi minuti.</p>
-<p><strong>Causa:</strong> La regex <code>topics</code> del connector non copre il nuovo topic, oppure il topic è incluso nella blacklist. MM2 rileva nuovi topic con un polling periodico (default 10 minuti).</p>
+<p><strong>Causa:</strong> La regex <code>topics</code> del connector non copre il nuovo topic, oppure il topic è incluso nella blacklist. MM2 rileva nuovi topic con un polling periodico (<code>refresh.topics.interval.seconds</code>, default 600 s).</p>
 <p><strong>Soluzione:</strong> Verificare la configurazione del connector e forzare il refresh.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare la configurazione attuale del connector</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
@@ -25007,85 +25018,82 @@
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Controllare i topic attualmente replicati</span>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span>--list<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"^primary\."</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Forzare refresh della lista topic nel connector (restart task)</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/tasks/0/restart
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Forzare un refresh: restart di connector e task</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s2">"http://connect:8083/connectors/mirror-source-connector/restart?includeTasks=true"</span>
 </span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Se la blacklist esclude il topic, aggiornare la configurazione</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"topics.blacklist": ".*internal.*"}'</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Per cambiare config: PUT /config SOSTITUISCE l'intera config, quindi inviare</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># sempre il JSON completo (partire dall'output del GET .../config)</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">  </span>-d<span class="w"> </span>@mirror-source-config-completa.json
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-consumer-group-offset-non-sincronizzato-dopo-failover">Scenario 2 — Consumer group offset non sincronizzato dopo failover<a class="headerlink" href="#scenario-2-consumer-group-offset-non-sincronizzato-dopo-failover" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> Dopo il failover, i consumer riprendono dall'inizio del topic (offset 0) invece di riprendere dall'ultimo offset processato.</p>
-<p><strong>Causa:</strong> Il <code>MirrorCheckpointConnector</code> non è in esecuzione o il sync degli offset era in ritardo al momento del disastro. Gli offset tradotti risiedono nel topic <code>mm2-checkpoints.primary.internal</code>.</p>
+<p><strong>Sintomo:</strong> Dopo il failover, i consumer ripartono dall'inizio (o dalla fine, secondo <code>auto.offset.reset</code>) invece che dall'ultimo offset processato.</p>
+<p><strong>Causa:</strong> Il <code>MirrorCheckpointConnector</code> non gira, <code>sync.group.offsets.enabled</code> è false (default), il gruppo era già attivo sul secondario, oppure il sync era in ritardo al momento del disastro. Gli offset tradotti risiedono in <code>primary.checkpoints.internal</code>.</p>
 <p><strong>Soluzione:</strong> Verificare il checkpoint connector e, se necessario, ripristinare gli offset manualmente.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Verificare lo stato del MirrorCheckpointConnector</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>curl<span class="w"> </span>http://connect:8083/connectors/mirror-checkpoint-connector/status<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Leggere gli offset tradotti disponibili</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>kafka-console-consumer.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--topic<span class="w"> </span>mm2-checkpoints.primary.internal<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--from-beginning<span class="w"> </span>--max-messages<span class="w"> </span><span class="m">100</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Impostare manualmente l'offset per un consumer group</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span>--group<span class="w"> </span>my-consumer-group<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span>--topic<span class="w"> </span>primary.orders<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span>--reset-offsets<span class="w"> </span>--to-latest<span class="w"> </span>--execute
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Ridurre l'intervallo di sync per il futuro (nel connector config)</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># sync.group.offsets.interval.seconds=30</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Fallback manuale (gruppo fermo): ripartire da un timestamp poco precedente</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># al disastro; si accettano duplicati ma non si perdono dati.</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># --to-latest perderebbe tutto ciò che non era ancora stato consumato.</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--group<span class="w"> </span>my-consumer-group<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--topic<span class="w"> </span>primary.orders<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--reset-offsets<span class="w"> </span>--to-datetime<span class="w"> </span><span class="m">2026</span>-10-04T10:00:00.000<span class="w"> </span>--execute
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Ridurre l'intervallo di sync per il futuro (nel connector config)</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># sync.group.offsets.interval.seconds=30</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-lag-di-replicazione-elevato-backlog-mm2">Scenario 3 — Lag di replicazione elevato (backlog MM2)<a class="headerlink" href="#scenario-3-lag-di-replicazione-elevato-backlog-mm2" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> I topic nel cluster secondario sono in ritardo di migliaia/milioni di messaggi rispetto al primario. La metrica <code>replication-latency-ms-avg</code> è alta.</p>
 <p><strong>Causa:</strong> Il numero di task MM2 è insufficiente per il throughput, oppure la bandwidth WAN è il collo di bottiglia. Possibile anche per topic con partizioni elevate con <code>tasks.max</code> troppo basso.</p>
 <p><strong>Soluzione:</strong> Aumentare il parallelismo e monitorare le metriche di rete.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare il lag di replicazione per topic</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kafka-consumer-groups.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--describe<span class="w"> </span>--group<span class="w"> </span>primary.primary-&gt;secondary
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="c1"># Controllare metriche JMX MM2 via kcat</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>kcat<span class="w"> </span>-b<span class="w"> </span>secondary-kafka:9092<span class="w"> </span>-L<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"primary\."</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Aumentare tasks.max nel connector (richiede restart)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Il source connector assegna le partizioni a mano e non usa un consumer group:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># il lag si legge dalle metriche JMX kafka.connect.mirror:type=MirrorSourceConnector</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># (replication-latency-ms-avg/max, record-count) e dal topic heartbeats.</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Confrontare gli end offset sorgente/destinazione di un topic:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>kafka-get-offsets.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>primary-kafka:9092<span class="w"> </span>--topic<span class="w"> </span>orders
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>kafka-get-offsets.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span>--topic<span class="w"> </span>primary.orders
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Aumentare tasks.max: inviare la config COMPLETA (PUT sostituisce tutto),</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># con tasks.max più alto (max utile = numero totale di partizioni replicate)</span>
 </span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"tasks.max": "8", "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector"}'</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">  </span>-d<span class="w"> </span>@mirror-source-config-completa.json
 </span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="c1"># Monitorare throughput di rete tra datacenter</span>
 </span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="c1"># Su Linux: iftop -i eth0 -f "host secondary-kafka"</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-loop-di-replicazione-in-topologia-active-active">Scenario 4 — Loop di replicazione in topologia active-active<a class="headerlink" href="#scenario-4-loop-di-replicazione-in-topologia-active-active" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo:</strong> I messaggi vengono duplicati indefinitamente tra i due cluster. I topic crescono in modo anomalo. I log mostrano messaggi con header <code>__mm2_origin</code> che vengono rireplicati.</p>
-<p><strong>Causa:</strong> Con <code>IdentityReplicationPolicy</code> in modalità active-active, MM2 non distingue i messaggi originali da quelli già replicati e li ricopia in entrambe le direzioni creando un loop.</p>
+<p><strong>Sintomo:</strong> I messaggi vengono duplicati indefinitamente tra i due cluster. I topic crescono in modo anomalo. Gli stessi record compaiono in entrambi i cluster con offset crescenti.</p>
+<p><strong>Causa:</strong> Con <code>IdentityReplicationPolicy</code> in modalità active-active i topic hanno lo stesso nome nei due cluster. MM2 rileva i cicli solo tramite il prefisso alias (es. <code>primary.primary.orders</code> viene scartato), quindi senza prefisso ricopia i record in entrambe le direzioni.</p>
 <p><strong>Soluzione:</strong> Ripristinare la <code>DefaultReplicationPolicy</code> (che usa i prefissi) o disabilitare una direzione di replicazione.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Verificare la policy attuale</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>curl<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>jq<span class="w"> </span><span class="s1">'."replication.policy.class"'</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Disabilitare immediatamente la replicazione inversa per fermare il loop</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/mirror-source-secondary-primary/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"enabled": "false"}'</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Fermare subito il loop: mettere in pausa il connector della direzione inversa</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># (il nome dipende da come è stato creato; elencarli con GET /connectors)</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>curl<span class="w"> </span>http://connect:8083/connectors
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/&lt;connector-secondary-to-primary&gt;/pause
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Ripristinare DefaultReplicationPolicy (usa prefissi per evitare loop)</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>curl<span class="w"> </span>-X<span class="w"> </span>PUT<span class="w"> </span>http://connect:8083/connectors/mirror-source-connector/config<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">"Content-Type: application/json"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"replication.policy.class": "org.apache.kafka.connect.mirror.DefaultReplicationPolicy"}'</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># Verificare che non ci siano topic con doppio prefisso (es. primary.primary.orders)</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span>--list<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"primary\.primary\."</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Ripristinare DefaultReplicationPolicy (prefissi) in TUTTI i connector MM2</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># (config completa, PUT sostituisce tutto) oppure nel mm2.properties:</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="c1">#   replication.policy.class = org.apache.kafka.connect.mirror.DefaultReplicationPolicy</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a>
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="c1"># Poi ripulire i topic duplicati creati dal loop</span>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a>kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>secondary-kafka:9092<span class="w"> </span>--list
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="https://kafka.apache.org/documentation/#georeplication">MirrorMaker 2 Documentation</a></li>
 <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-382">KIP-382: MirrorMaker 2.0</a></li>
+<li><a href="https://docs.confluent.io/platform/current/multi-dc-deployments/cluster-linking/index.html">Confluent Cluster Linking (alternativa Confluent: offset preservati, nessun prefisso)</a></li>
 <li><a href="https://docs.confluent.io/platform/current/multi-dc-deployments/replicator/replicator-quickstart.html">Confluent Replicator (enterprise alternative)</a></li>
 </ul>
 

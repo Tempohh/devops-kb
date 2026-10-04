@@ -17739,7 +17739,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18423,7 +18423,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18448,7 +18448,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18691,7 +18691,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -18868,7 +18868,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24832,6 +24832,11 @@
 <p><strong>Tombstone</strong> — Record con chiave non-null e <strong>valore null</strong>. Indica che la chiave deve essere eliminata. I tombstone vengono mantenuti per <code>delete.retention.ms</code> prima di essere rimossi definitivamente.</p>
 <p><strong>Log Head</strong> — La parte più recente del log (dirty), dove vengono scritti i nuovi record.
 <strong>Log Tail</strong> — La parte già compattata del log (clean), con al massimo un record per chiave.</p>
+<p><strong>Active segment</strong> — Il segmento su cui il broker sta scrivendo. <strong>Non viene mai compattato</strong>: il cleaner lavora solo su segmenti chiusi. Un segmento si chiude (roll) al raggiungimento di <code>segment.bytes</code> o <code>segment.ms</code>; finché non avviene, i duplicati restano visibili anche se il dirty ratio è alto.</p>
+<div class="admonition note">
+<p class="admonition-title">Uso interno</p>
+<p><code>__consumer_offsets</code> (offset committati dai consumer group) e i changelog di Kafka Streams sono topic compacted: la compaction è un meccanismo centrale di Kafka, non solo una feature opzionale.</p>
+</div>
 <h2 id="architettura-come-funziona">Architettura / Come Funziona<a class="headerlink" href="#architettura-come-funziona" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TB
     subgraph Before["Log PRIMA della compaction (topic: user-preferences)"]
@@ -24856,7 +24861,7 @@
 1. Il <strong>Log Cleaner thread</strong> monitora il dirty ratio di tutti i topic compacted
 2. Quando supera <code>min.cleanable.dirty.ratio</code>, il cleaner crea un indice delle chiavi con i loro ultimi offset nel dirty segment
 3. Il cleaner riscrive i segmenti rimuovendo i record con offset inferiore all'ultimo per quella chiave
-4. I tombstone vengono mantenuti per <code>delete.retention.ms</code> poi eliminati</p>
+4. I tombstone vengono mantenuti per <code>delete.retention.ms</code> poi eliminati (il conteggio parte da quando il segmento che li contiene è stato compattato, non dall'invio)</p>
 <p><strong>Garanzie importanti:</strong>
 - L'ordine relativo dei record per una stessa chiave è preservato
 - I consumer che leggono dall'inizio vedono almeno l'ultimo valore per ogni chiave
@@ -24904,7 +24909,7 @@
 <div class="language-properties highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Frequenza di esecuzione del cleaner thread</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">log.cleaner.enable</span><span class="o">=</span><span class="s">true</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">log.cleaner.threads</span><span class="o">=</span><span class="s">1                    # aumentare se compaction lenta</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">log.cleaner.io.max.bytes.per.second</span><span class="o">=</span><span class="s">1048576  # rate limiting I/O</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">log.cleaner.io.max.bytes.per.second</span><span class="o">=</span><span class="s">1048576  # rate limiting I/O (default: illimitato)</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Per topic</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="na">min.cleanable.dirty.ratio</span><span class="o">=</span><span class="s">0.5           # inizia compaction quando 50% dirty</span>
@@ -24924,25 +24929,27 @@
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">);</span>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">producer</span><span class="p">.</span><span class="na">send</span><span class="p">(</span><span class="n">tombstone</span><span class="p">);</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Da CLI (valore vuoto = tombstone)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"user:123:"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>kafka-console-producer.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--topic<span class="w"> </span>user-preferences<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"parse.key=true"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"key.separator=:"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"null.marker=~"</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Note: null marker approach varies by Kafka version</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Da CLI: un valore vuoto NON è un tombstone (è una stringa vuota).</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Serve null.marker (Kafka &gt;= 3.2, KIP-810): il valore "~" viene inviato come null</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"user:123:~"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>kafka-console-producer.sh<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--topic<span class="w"> </span>user-preferences<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"parse.key=true"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"key.separator=:"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">  </span>--property<span class="w"> </span><span class="s2">"null.marker=~"</span>
 </span></code></pre></div>
 <h3 id="topic-changelog-di-kafka-streams">Topic changelog di Kafka Streams<a class="headerlink" href="#topic-changelog-di-kafka-streams" title="Permanent link">&para;</a></h3>
 <p>Kafka Streams crea automaticamente topic changelog per i state store con compaction abilitata:</p>
 <div class="language-java highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// I topic changelog hanno naming: application-id-store-name-changelog</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1">// Es: my-app-orders-store-changelog</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1">// Creati con cleanup.policy=compact di default</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1">// (i changelog di window store usano compact,delete con retention.ms</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1">//  legata alla durata della finestra)</span>
 </span></code></pre></div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <div class="admonition tip">
 <p class="admonition-title">Usare sempre le chiavi con i topic compacted</p>
-<p>La compaction è basata sulle chiavi. Record senza chiave (key=null) non vengono mai compattati e si accumulano.</p>
+<p>La compaction è basata sulle chiavi. Un topic con <code>cleanup.policy=compact</code> <strong>rifiuta</strong> i record con key=null (il broker risponde con <code>InvalidRecordException: Compacted topic cannot accept message without key</code>). Con <code>compact,delete</code> il rifiuto vale ugualmente.</p>
 </div>
 <div class="admonition warning">
 <p class="admonition-title">Tombstone non elimina immediatamente</p>
@@ -24963,41 +24970,44 @@
 <p><strong>Soluzione:</strong> Verificare che il cleaner sia attivo sul broker e che il topic abbia la policy corretta.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Verificare configurazione del broker (cleaner abilitato)</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--entity-type<span class="w"> </span>brokers<span class="w"> </span>--entity-name<span class="w"> </span><span class="m">1</span><span class="w"> </span>--describe<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>cleaner
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1"># Verificare che il topic abbia cleanup.policy=compact</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span>--describe
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Abbassare la soglia dirty ratio per forzare compaction più frequente</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--alter<span class="w"> </span>--add-config<span class="w"> </span>min.cleanable.dirty.ratio<span class="o">=</span><span class="m">0</span>.1
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="c1"># Abilitare log DEBUG per monitorare il cleaner</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># In log4j.properties del broker:</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># log4j.logger.kafka.log.LogCleaner=DEBUG</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--entity-type<span class="w"> </span>brokers<span class="w"> </span>--entity-name<span class="w"> </span><span class="m">1</span><span class="w"> </span>--describe<span class="w"> </span>--all<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>cleaner
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># senza --all vengono mostrate solo le override dinamiche, non server.properties</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># Verificare che il topic abbia cleanup.policy=compact</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span>--describe
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># Abbassare la soglia dirty ratio per forzare compaction più frequente</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span>--alter<span class="w"> </span>--add-config<span class="w"> </span>min.cleanable.dirty.ratio<span class="o">=</span><span class="m">0</span>.1
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="c1"># Il cleaner thread può morire per un'eccezione (es. segmento corrotto):</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># cercare "Error due to" / "Stopped" nel log e la metrica</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1"># kafka.log:type=LogCleanerManager,name=time-since-last-run-ms</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"kafka.log.LogCleaner|log-cleaner"</span><span class="w"> </span>/var/log/kafka/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="c1"># Abilitare log DEBUG per monitorare il cleaner</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="c1"># log4j.properties (Kafka 3.x):  log4j.logger.kafka.log.LogCleaner=DEBUG</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="c1"># log4j2 (Kafka 4.x): logger name="kafka.log.LogCleaner" level="DEBUG"</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-topic-cresce-indefinitamente-nonostante-compaction">Scenario 2 — Topic cresce indefinitamente nonostante compaction<a class="headerlink" href="#scenario-2-topic-cresce-indefinitamente-nonostante-compaction" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il log compacted aumenta di dimensione senza che i vecchi record vengano rimossi.</p>
-<p><strong>Causa:</strong> Record scritti senza chiave (key=null) non vengono mai compattati. Oppure il dirty ratio è troppo alto e il cleaner non si attiva abbastanza spesso.</p>
-<p><strong>Soluzione:</strong> Verificare che tutti i producer inviino record con chiave. Ridurre <code>min.cleanable.dirty.ratio</code>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Controllare se ci sono record senza chiave nel topic</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kafka-console-consumer.sh<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--topic<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--from-beginning<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">  </span>--property<span class="w"> </span>print.key<span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span>--max-messages<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s2">"^null"</span>
+<p><strong>Causa:</strong> Cause tipiche: (1) il segmento attivo non è compattabile e <code>segment.bytes</code> (default 1 GiB) / <code>segment.ms</code> (default 7 giorni) sono troppo grandi, quindi i segmenti non si chiudono mai; (2) <code>min.compaction.lag.ms</code> impedisce di compattare record recenti; (3) il dirty ratio è troppo alto; (4) il cleaner thread è morto; (5) la policy è <code>compact,delete</code> e la dimensione è dominata da record con chiavi tutte distinte (nessun duplicato da rimuovere). Record senza chiave non sono la causa: il broker li rifiuta sui topic compacted (possono esistere solo se la policy è stata aggiunta a un topic già popolato).</p>
+<p><strong>Soluzione:</strong> Ridurre <code>segment.ms</code>/<code>segment.bytes</code> e <code>min.cleanable.dirty.ratio</code>; verificare <code>min.compaction.lag.ms</code>; controllare che il cleaner sia vivo (Scenario 1). Usare <code>max.compaction.lag.ms</code> per forzare la compaction entro un tempo massimo.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Chiudere più spesso i segmenti (es. 1 ora) così diventano compattabili</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--alter<span class="w"> </span>--add-config<span class="w"> </span>segment.ms<span class="o">=</span><span class="m">3600000</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1"># Verificare dimensione segmenti dirty vs clean (tramite JMX)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Verificare dimensione segmenti dirty vs clean (tramite JMX)</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Forzare compaction abbassando la soglia</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">  </span>--alter<span class="w"> </span>--add-config<span class="w"> </span>min.cleanable.dirty.ratio<span class="o">=</span><span class="m">0</span>.05
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="c1"># Forzare compaction abbassando la soglia</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">  </span>--entity-type<span class="w"> </span>topics<span class="w"> </span>--entity-name<span class="w"> </span>my-topic<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span>--alter<span class="w"> </span>--add-config<span class="w"> </span>min.cleanable.dirty.ratio<span class="o">=</span><span class="m">0</span>.05
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-consumer-vede-troppi-tombstone-valori-null">Scenario 3 — Consumer vede troppi tombstone / valori null<a class="headerlink" href="#scenario-3-consumer-vede-troppi-tombstone-valori-null" title="Permanent link">&para;</a></h3>
@@ -25026,13 +25036,14 @@
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># Metric: kafka.log:type=LogCleaner,name=cleaner-recopy-percent</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Metric: kafka.log:type=LogCleanerManager,name=max-dirty-percent</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Aggiornare configurazione broker (richiede riavvio o dynamic config se supportato)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># In server.properties:</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># log.cleaner.threads=2</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="c1"># log.cleaner.io.max.bytes.per.second=52428800   # 50 MB/s</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="c1"># Verificare throughput del cleaner nel log del broker</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a>grep<span class="w"> </span><span class="s2">"LogCleaner"</span><span class="w"> </span>/var/log/kafka/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-50
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># Entrambi i parametri sono dynamic broker config (nessun riavvio):</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>kafka-configs.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span>--entity-type<span class="w"> </span>brokers<span class="w"> </span>--entity-default<span class="w"> </span>--alter<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">  </span>--add-config<span class="w"> </span>log.cleaner.threads<span class="o">=</span><span class="m">2</span>,log.cleaner.io.max.bytes.per.second<span class="o">=</span><span class="m">52428800</span><span class="w">  </span><span class="c1"># 50 MB/s</span>
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="c1"># In alternativa in server.properties (richiede riavvio)</span>
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="c1"># Verificare throughput del cleaner nel log del broker</span>
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>grep<span class="w"> </span><span class="s2">"LogCleaner"</span><span class="w"> </span>/var/log/kafka/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-50
 </span></code></pre></div>
 <h2 id="riferimenti">Riferimenti<a class="headerlink" href="#riferimenti" title="Permanent link">&para;</a></h2>
 <ul>
