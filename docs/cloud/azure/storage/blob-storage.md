@@ -7,7 +7,7 @@ search_keywords: [Azure Blob Storage, object storage Azure, storage account, LRS
 parent: cloud/azure/storage/_index
 related: [cloud/azure/security/key-vault, cloud/azure/compute/aks-containers, cloud/azure/monitoring/monitor-log-analytics]
 official_docs: https://learn.microsoft.com/azure/storage/blobs/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -67,8 +67,7 @@ az storage account show \
 | **RA-GZRS** (Read-Access Geo+Zone) | 6 | 2 regioni | 99.9% scrittura / 99.99% lettura | Lettura secondaria sempre disponibile | tipicamente <15 min, nessun SLA | Massima disponibilità + read scaling |
 
 !!! note "SLA e RPO"
-    Gli SLA indicati valgono per il tier Hot (Cool/Cold hanno SLA più bassi). **RTO** = tempo per ripristinare il servizio, **RPO** = dati persi al massimo in caso di disastro. La replica geo è asincrona: l'RPO è un valore tipico, non garantito da SLA. <!-- REVIEW: verificare SLA correnti su https://azure.microsoft.com/support/legal/sla/storage/ -->
-
+    Gli SLA indicati valgono per il tier Hot (Cool/Cold, e Archive dove supportato, hanno SLA più bassi: 99% in lettura/scrittura, 99.9% in lettura per RA-GRS/RA-GZRS). **RTO** = tempo per ripristinare il servizio, **RPO** = dati persi al massimo in caso di disastro. La replica geo è asincrona: l'RPO è un valore tipico, non garantito da SLA.
 !!! tip "Durabilità"
     LRS offre almeno 11 nines di durabilità, ZRS 12, GRS/GZRS 16: più copie indipendenti = minor probabilità di perdita simultanea.
 
@@ -342,7 +341,7 @@ az storage account show \
 `upload-batch` deduce il `Content-Type` dall'estensione di ogni file: forzare `text/html` su tutto romperebbe CSS/JS/immagini.
 
 !!! tip "HTTPS con custom domain"
-    L'endpoint static website supporta HTTPS solo sul dominio `*.web.core.windows.net`. Per custom domain + TLS + CDN globale mettere **Azure Front Door** davanti all'endpoint web. I profili Azure CDN "classic" sono in dismissione, non usarli per nuovi progetti. <!-- REVIEW: verificare date di retirement Azure CDN classic -->
+    L'endpoint static website supporta HTTPS solo sul dominio `*.web.core.windows.net`. Per custom domain + TLS + CDN globale mettere **Azure Front Door** davanti all'endpoint web. Azure CDN Standard from Microsoft (classic) sarà ritirato il **30 settembre 2027** (dal 15 agosto 2025 non accetta nuovi profili né nuovi domini): migrare ad Azure Front Door Standard/Premium. Azure CDN from Edgio è già stato ritirato il 15 gennaio 2025.
 
 !!! note "Static website e firewall"
     L'endpoint `$web` è pubblico per design: con `--default-action Deny` non è raggiungibile dal web, a meno di passare da Front Door con Private Link.
