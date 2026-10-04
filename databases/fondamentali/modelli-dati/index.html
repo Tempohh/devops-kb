@@ -12191,7 +12191,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12235,7 +12235,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12260,7 +12260,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12542,7 +12542,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24920,7 +24920,7 @@
 <p>Il modello relazionale (Codd, 1970) organizza i dati in <strong>relazioni</strong> (tabelle) con schemi fissi, collegate da chiavi. La potenza sta nella flessibilità delle query tramite algebra relazionale — ogni relazione può essere combinata con qualsiasi altra tramite JOIN.</p>
 <p><strong>Punto di forza unico</strong>: il modello relazionale non presuppone i pattern di accesso. Puoi fare query ad hoc su qualsiasi combinazione di colonne senza ristrutturare i dati. È l'unico modello che non ti fa pagare il costo di "sapere in anticipo come accederai ai dati".</p>
 <h3 id="normalizzazione-il-principio-non-il-dogma">Normalizzazione — Il Principio, Non il Dogma<a class="headerlink" href="#normalizzazione-il-principio-non-il-dogma" title="Permanent link">&para;</a></h3>
-<p>La normalizzazione elimina la ridondanza: ogni fatto è memorizzato una sola volta. La 3NF (Terza Forma Normale) garantisce che ogni attributo dipenda solo dalla chiave primaria.</p>
+<p>La normalizzazione elimina la ridondanza: ogni fatto è memorizzato una sola volta. La 3NF (Terza Forma Normale) garantisce che ogni attributo non-chiave dipenda dalla chiave, dall'intera chiave e da nient'altro che la chiave (nessuna dipendenza transitiva tra attributi non-chiave).</p>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">-- Forma denormalizzata (ridondante)</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">ordini</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">cliente_id</span><span class="p">,</span><span class="w"> </span><span class="n">cliente_nome</span><span class="p">,</span><span class="w"> </span><span class="n">cliente_email</span><span class="p">,</span><span class="w"> </span><span class="n">prodotto</span><span class="p">,</span><span class="w"> </span><span class="n">prezzo</span><span class="p">)</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1">-- cliente_nome e cliente_email si ripetono per ogni ordine</span>
@@ -24931,7 +24931,7 @@
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">ordini_righe</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">ordine_id</span><span class="w"> </span><span class="n">FK</span><span class="p">,</span><span class="w"> </span><span class="n">prodotto_id</span><span class="w"> </span><span class="n">FK</span><span class="p">,</span><span class="w"> </span><span class="n">quantita</span><span class="p">,</span><span class="w"> </span><span class="n">prezzo_unitario</span><span class="p">)</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">prodotti</span><span class="p">(</span><span class="n">id</span><span class="p">,</span><span class="w"> </span><span class="n">nome</span><span class="p">,</span><span class="w"> </span><span class="n">prezzo_base</span><span class="p">)</span>
 </span></code></pre></div>
-<p><strong>Il costo della normalizzazione</strong>: più JOIN per ricostruire i dati. In sistemi OLAP o con pattern di lettura molto specifici, la denormalizzazione deliberata (materializzare join, duplicare dati) è una strategia valida — non un errore.</p>
+<p><strong>Il costo della normalizzazione</strong>: più JOIN per ricostruire i dati. In sistemi OLAP (Online Analytical Processing: query analitiche aggregate su grandi volumi, in contrapposizione a OLTP, le transazioni operative) o con pattern di lettura molto specifici, la denormalizzazione deliberata (materializzare join, duplicare dati) è una strategia valida — non un errore.</p>
 <h3 id="impedance-mismatch">Impedance Mismatch<a class="headerlink" href="#impedance-mismatch" title="Permanent link">&para;</a></h3>
 <p>Il modello relazionale non mappa naturalmente sulle strutture dati degli linguaggi OOP. Un <code>User</code> con una lista di <code>Address</code> richiede 2 tabelle e un JOIN — ma è un singolo oggetto in memoria. Gli ORM tentano di nascondere questo mismatch, ma lo amplificano con il problema N+1.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># N+1 problem classico (ORM)</span>
@@ -24982,7 +24982,7 @@
 <p>Il modello più semplice: una hash table distribuita. Una chiave identifica univocamente un valore opaco. Nessuna struttura interna, nessuna query sul contenuto.</p>
 <p><strong>Problema che risolve</strong>: latenza di accesso O(1) a milioni di oggetti, scalabilità orizzontale semplice.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>GET user:session:a1b2c3d4     → {user_id: 123, expires: 1708780800}
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>SET cache:product:456 300 "..." → (expiry 300s)
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>SET cache:product:456 "..." EX 300 → OK (expiry 300s)
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>INCR rate:ip:192.168.1.1      → 47
 </span></code></pre></div>
 <p>Redis estende il modello key-value con strutture dati (liste, hash, sorted set) — è un "data structure server", non solo un cache. Vedi <a href="../../nosql/redis/">Redis</a>.</p>
@@ -25002,9 +25002,9 @@
 <p>I database graph (Neo4j, Amazon Neptune, ArangoDB) modellano i dati come nodi e archi con proprietà. Le query traversano relazioni — la complessità non cresce con il volume totale dei dati ma con la profondità della traversal.</p>
 <p><strong>Problema che risolve</strong>: query su relazioni multi-hop che in SQL richiederebbero JOIN ricorsivi o CTE ricorsivi:</p>
 <div class="language-cypher highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="err">--</span><span class="w"> </span><span class="n">Neo4j</span><span class="w"> </span><span class="n">Cypher</span><span class="p">:</span><span class="w"> </span><span class="n">trova</span><span class="w"> </span><span class="n">tutti</span><span class="w"> </span><span class="n">gli</span><span class="w"> </span><span class="n">amici</span><span class="w"> </span><span class="n">di</span><span class="w"> </span><span class="n">amici</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">distanza</span><span class="w"> </span><span class="err">≤</span><span class="w"> </span><span class="m">3</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">MATCH</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">:</span><span class="n">Person</span><span class="w"> </span><span class="p">{</span><span class="n">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Alice"</span><span class="p">})</span><span class="o">-[</span><span class="p">:</span><span class="n">FRIENDS_WITH</span><span class="p">*</span><span class="m">1</span><span class="p">..</span><span class="m">3</span><span class="o">]-</span><span class="p">(</span><span class="n">friend</span><span class="p">)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">MATCH</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="p">:</span><span class="n">Person</span><span class="w"> </span><span class="p">{</span><span class="n">name</span><span class="p">:</span><span class="w"> </span><span class="s">"Alice"</span><span class="p">})</span><span class="o">-[</span><span class="p">:</span><span class="n">FRIENDS_WITH</span><span class="p">*</span><span class="m">1</span><span class="p">..</span><span class="m">3</span><span class="o">]-</span><span class="p">(</span><span class="n">friend</span><span class="p">)</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">WHERE</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="n">friend</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">p</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">RETURN</span><span class="w"> </span><span class="k">DISTINCT</span><span class="w"> </span><span class="n">friend</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">LENGTH</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">hops</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">RETURN</span><span class="w"> </span><span class="n">friend</span><span class="p">.</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">min</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">path</span><span class="p">))</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="n">hops</span>
 </span></code></pre></div>
 <div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- Equivalente in SQL — ricorsivo e molto più lento su grafi profondi</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">WITH</span><span class="w"> </span><span class="k">RECURSIVE</span><span class="w"> </span><span class="n">amici</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="p">(</span>
@@ -25054,7 +25054,7 @@
 <p><strong>Indici per similarity search:</strong>
 - <strong>HNSW</strong> (Hierarchical Navigable Small World): alta recall, bassa latenza, alto uso memoria
 - <strong>IVF</strong> (Inverted File Index): più scalabile in memoria, recall leggermente inferiore
-- <strong>Flat</strong>: brute-force esatto, impraticabile oltre ~1M vettori</p>
+- <strong>Flat</strong>: brute-force esatto (recall 100%), latenza lineare col numero di vettori: valido fino a qualche centinaio di migliaia, poi serve un indice approssimato (ANN)</p>
 <div class="admonition note">
 <p class="admonition-title">pgvector in PostgreSQL</p>
 <p>pgvector permette di fare similarity search all'interno di PostgreSQL, combinando il modello relazionale con la ricerca vettoriale. Ottimo per applicazioni che già usano Postgres — evita la complessità di un sistema separato.</p>
@@ -25089,7 +25089,7 @@
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-document-mongodb-con-crescita-incontrollata">Scenario 2 — Document MongoDB con crescita incontrollata<a class="headerlink" href="#scenario-2-document-mongodb-con-crescita-incontrollata" title="Permanent link">&para;</a></h3>
-<p><strong>Sintomo</strong>: errore <code>Document exceeds maximum size 16793600</code> oppure letture sempre più lente su una collection; documenti nella collection superano i 16MB.</p>
+<p><strong>Sintomo</strong>: scritture rifiutate con errore di dimensione BSON (limite 16 MB = 16793600 byte, es. <code>object to insert too large</code> / <code>BSONObj size ... is invalid</code>) oppure letture e update sempre più lenti su una collection; documenti vicini al limite.</p>
 <p><strong>Causa</strong>: array embedded non limitato (commenti, log, eventi) che cresce indefinitamente all'interno di un singolo documento.</p>
 <p><strong>Soluzione</strong>: refactoring da embedding a referencing; spostare l'array in una collection separata.</p>
 <div class="language-javascript highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1">// Diagnosi: trovare documenti vicini al limite</span>
@@ -25113,28 +25113,32 @@
 <hr />
 <h3 id="scenario-3-query-cassandra-con-allow-filtering">Scenario 3 — Query Cassandra con ALLOW FILTERING<a class="headerlink" href="#scenario-3-query-cassandra-con-allow-filtering" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: query con <code>ALLOW FILTERING</code> in produzione con latenze elevate e timeout; warnings nei log del driver.</p>
-<p><strong>Causa</strong>: query su colonne che non fanno parte della partition key o clustering key — Cassandra deve scansionare tutte le partizioni (full table scan distribuito).</p>
+<p><strong>Causa</strong>: query su colonne che non fanno parte della primary key (o che non rispettano l'ordine delle clustering key) — Cassandra non può usare l'indice di partizione e deve scansionare. Senza la partition key nel predicato è un full table scan distribuito su tutti i nodi; con la partition key il filtro resta dentro una partizione, ma costa comunque proporzionalmente alla sua dimensione.</p>
 <p><strong>Soluzione</strong>: riprogettare il data model creando una tabella dedicata per il pattern di query necessario (query-driven design).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>-- PROBLEMA: query su colonna non chiave
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>SELECT * FROM events WHERE user_id = 123 AND status = 'pending' ALLOW FILTERING;
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>-- Questo scansiona TUTTE le partizioni — inaccettabile in produzione
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>-- SOLUZIONE: tabella dedicata al pattern di query
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>CREATE TABLE events_by_status (
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>  status TEXT,
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>  created_at TIMESTAMP,
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>  user_id UUID,
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>  event_data TEXT,
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>  PRIMARY KEY ((status), created_at, user_id)
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>) WITH CLUSTERING ORDER BY (created_at DESC);
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>-- Query efficiente sulla nuova tabella
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>SELECT * FROM events_by_status
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>WHERE status = 'pending' AND created_at &gt; '2024-01-01';
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>-- Filtra riga per riga: costo proporzionale alla partizione (a tutta la tabella
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>-- se user_id non è la partition key) — inaccettabile in produzione
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>-- SOLUZIONE: tabella dedicata al pattern di query.
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>-- Il bucket giornaliero nella partition key evita una partizione "pending"
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>-- unbounded (hot partition, che è un anti-pattern per sé).
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>CREATE TABLE events_by_status (
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>  status TEXT,
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>  day DATE,
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>  created_at TIMESTAMP,
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>  user_id UUID,
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>  event_data TEXT,
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>  PRIMARY KEY ((status, day), created_at, user_id)
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>) WITH CLUSTERING ORDER BY (created_at DESC, user_id ASC);
 </span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>-- Verificare execution plan
-</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>TRACING ON;
-</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>SELECT * FROM events_by_status WHERE status = 'pending' LIMIT 100;
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>-- Query efficiente sulla nuova tabella (una partizione per giorno)
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>SELECT * FROM events_by_status
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>WHERE status = 'pending' AND day = '2024-01-15';
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>
+</span><span id="__span-12-22"><a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>-- Verificare il comportamento della query (cqlsh)
+</span><span id="__span-12-23"><a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>TRACING ON;
+</span><span id="__span-12-24"><a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>SELECT * FROM events_by_status WHERE status = 'pending' AND day = '2024-01-15' LIMIT 100;
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-similarity-search-vettoriale-con-bassa-precisione-recall">Scenario 4 — Similarity search vettoriale con bassa precisione (recall)<a class="headerlink" href="#scenario-4-similarity-search-vettoriale-con-bassa-precisione-recall" title="Permanent link">&para;</a></h3>
@@ -25142,32 +25146,33 @@
 <p><strong>Causa</strong>: indice HNSW con parametri <code>ef_construction</code> o <code>m</code> troppo bassi, oppure embedding generati da modelli diversi (spazi vettoriali incompatibili).</p>
 <p><strong>Soluzione</strong>: ricreare l'indice con parametri più alti e verificare la coerenza del modello di embedding.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># pgvector — verifica e ricreazione indice con parametri ottimizzati</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># ef_construction: qualità costruzione (default 64, aumentare per recall alta)</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># m: connessioni per nodo (default 16, range 4-64)</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Diagnosi: misurare recall con ground truth</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="kn">import</span><span class="w"> </span><span class="nn">psycopg2</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="n">conn</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">"..."</span><span class="p">)</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="c1"># Ricrea indice con parametri migliori</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"DROP INDEX IF EXISTS embeddings_hnsw_idx;"</span><span class="p">)</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s2">  CREATE INDEX embeddings_hnsw_idx ON documents</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="s2">  USING hnsw (embedding vector_cosine_ops)</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s2">  WITH (m = 32, ef_construction = 128);</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="s2">"""</span><span class="p">)</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="c1"># Imposta ef per query (bilanciamento recall/latenza a runtime)</span>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"SET hnsw.ef_search = 100;"</span><span class="p">)</span>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a>
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a><span class="c1"># Verifica che tutti gli embedding usino lo stesso modello</span>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
-</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="s2">  SELECT COUNT(*), AVG(vector_dims(embedding)) as avg_dims</span>
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="s2">  FROM documents;</span>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="s2">"""</span><span class="p">)</span>
-</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="nb">print</span><span class="p">(</span><span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">())</span>  <span class="c1"># Se avg_dims != 1536 (o atteso) ci sono embedding eterogenei</span>
-</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># ef_construction: qualità costruzione (default 64, range 4-1000, aumentare per recall alta)</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># m: connessioni per nodo (default 16, range 2-100)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># hnsw.ef_search: candidati esplorati a query time (default 40)</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="c1"># Diagnosi: misurare recall con ground truth</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="kn">import</span><span class="w"> </span><span class="nn">psycopg2</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">conn</span> <span class="o">=</span> <span class="n">psycopg2</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="s2">"..."</span><span class="p">)</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="n">cur</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">cursor</span><span class="p">()</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="c1"># Ricrea indice con parametri migliori</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"DROP INDEX IF EXISTS embeddings_hnsw_idx;"</span><span class="p">)</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="s2">  CREATE INDEX embeddings_hnsw_idx ON documents</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s2">  USING hnsw (embedding vector_cosine_ops)</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="s2">  WITH (m = 32, ef_construction = 128);</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="s2">"""</span><span class="p">)</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="c1"># Imposta ef per query (bilanciamento recall/latenza a runtime)</span>
+</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"SET hnsw.ef_search = 100;"</span><span class="p">)</span>
+</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>
+</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="c1"># Verifica che tutti gli embedding usino lo stesso modello</span>
+</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="n">cur</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">"""</span>
+</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="s2">  SELECT COUNT(*), AVG(vector_dims(embedding)) as avg_dims</span>
+</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="s2">  FROM documents;</span>
+</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="s2">"""</span><span class="p">)</span>
+</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="nb">print</span><span class="p">(</span><span class="n">cur</span><span class="o">.</span><span class="n">fetchone</span><span class="p">())</span>  <span class="c1"># Se avg_dims != 1536 (o atteso) ci sono embedding eterogenei</span>
+</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="n">conn</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>

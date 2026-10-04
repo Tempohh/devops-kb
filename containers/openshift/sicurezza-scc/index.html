@@ -12390,7 +12390,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12425,7 +12425,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12460,7 +12460,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24778,9 +24778,20 @@
 <td>nessuna</td>
 <td>Come <code>nonroot</code> ma con drop ALL capabilities e seccomp</td>
 </tr>
+<tr>
+<td><code>restricted-v3</code></td>
+<td>nessuna</td>
+<td>Dalla 4.20: la più restrittiva tra le predefinite, pensata per i pod con user namespaces (<code>hostUsers: false</code>); va concessa esplicitamente</td>
+</tr>
+<tr>
+<td><code>nested-container</code></td>
+<td>nessuna</td>
+<td>Dalla 4.20: per workload che eseguono container annidati dentro user namespaces (<code>hostUsers: false</code>); va concessa esplicitamente</td>
+</tr>
 </tbody>
 </table>
-<!-- REVIEW: verificare se nelle release 4.2x esiste `restricted-v3` (user namespaces) e va aggiunta alla tabella/al default -->
+<p>Dalla 4.20 i <strong>Linux user namespaces</strong> sono GA: con <code>hostUsers: false</code> nel pod spec il pod gira in uno user namespace dedicato, isolando UID del container da quelli del nodo. <code>restricted-v3</code> e <code>nested-container</code> sono le SCC introdotte per questo scenario; <code>restricted-v2</code> resta il riferimento per i pod senza user namespace.</p>
+<!-- CURRENCY: non verificato (2026-10) — se `restricted-v3` sia concessa a `system:authenticated` / diventi default non confermato dalla doc; si assume `restricted-v2` ancora default -->
 
 <p>Esistono anche <code>hostaccess</code> e SCC dedicate a componenti di sistema (<code>node-exporter</code>, ecc.). Le SCC <code>-v2</code> sono quelle da preferire: impongono <code>drop ALL</code> delle capabilities e il seccomp <code>runtime/default</code>, in linea con il PSA <code>restricted</code>.</p>
 <div class="admonition warning">

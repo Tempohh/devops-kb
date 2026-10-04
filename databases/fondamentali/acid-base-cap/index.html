@@ -12200,7 +12200,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12225,7 +12225,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12518,7 +12518,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -12553,7 +12553,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24933,9 +24933,9 @@
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="k">UPDATE</span><span class="w"> </span><span class="n">conti</span><span class="w"> </span><span class="k">SET</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">saldo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">500</span><span class="w"> </span><span class="k">WHERE</span><span class="w"> </span><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span><span class="w">  </span><span class="c1">-- Accredito</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">COMMIT</span><span class="p">;</span><span class="w">  </span><span class="c1">-- Entrambe o nessuna</span>
 </span></code></pre></div>
-<p><strong>Implementazione</strong>: i database usano un <strong>WAL (Write-Ahead Log)</strong> — ogni modifica viene scritta sul log prima di essere applicata alle pagine dati. In caso di crash durante una transazione, il database usa il WAL per fare rollback al riavvio.</p>
+<p><strong>Implementazione</strong>: i database usano un <strong>WAL (Write-Ahead Log)</strong> — ogni modifica viene scritta sul log prima di essere applicata alle pagine dati. In caso di crash il database rigioca il WAL al riavvio (redo) e scarta le transazioni non committate: nei motori con undo log (MySQL InnoDB, Oracle) le annulla esplicitamente; in PostgreSQL (MVCC) le versioni di riga non committate restano semplicemente invisibili.</p>
 <h3 id="consistency-invarianti-garantite">Consistency — Invarianti Garantite<a class="headerlink" href="#consistency-invarianti-garantite" title="Permanent link">&para;</a></h3>
-<p>La transizione tra stati del database deve rispettare tutte le vincoli di integrità definiti (constraint, foreign key, check). Questo è diverso dalla "consistency" nel CAP theorem — qui si parla di invarianti dello schema, non di coerenza tra repliche.</p>
+<p>La transizione tra stati del database deve rispettare tutti i vincoli di integrità definiti (constraint, foreign key, check). Questo è diverso dalla "consistency" nel CAP theorem — qui si parla di invarianti dello schema, non di coerenza tra repliche.</p>
 <div class="admonition warning">
 <p class="admonition-title">La C più fraintesa</p>
 <p>La Consistency in ACID è responsabilità parziale del database (enforcing constraints) e parziale dell'applicazione (business rules). Un database può essere ACID e permettere ugualmente inconsistenze applicative se i constraint non sono definiti correttamente.</p>
@@ -25045,7 +25045,7 @@
 <td>MongoDB</td>
 <td>PC</td>
 <td>EC</td>
-<td>Single-doc ACID, replica lag</td>
+<td>Write/read concern configurabili; transazioni multi-documento da 4.0</td>
 </tr>
 <tr>
 <td>PostgreSQL</td>
@@ -25057,7 +25057,7 @@
 <td>Zookeeper</td>
 <td>PC</td>
 <td>EC</td>
-<td>CP strict, alta latenza in lettura</td>
+<td>Scritture linearizzabili via leader; letture locali (veloci, ma possibili stale senza <code>sync</code>)</td>
 </tr>
 <tr>
 <td>CockroachDB</td>
@@ -25112,7 +25112,7 @@
 <tr>
 <td><strong>Causal Consistency</strong></td>
 <td>Le operazioni causalmente correlate sono viste nell'ordine corretto</td>
-<td>Vector clocks (DynamoDB streams)</td>
+<td>Vector clocks / sessioni causali (MongoDB causal consistency, Dynamo originale)</td>
 </tr>
 <tr>
 <td><strong>Eventual Consistency</strong></td>
@@ -25137,7 +25137,7 @@
 </span></code></pre></div>
 <p><strong>Il problema del 2PC</strong>: se il coordinator cade dopo aver ricevuto tutti i YES ma prima di inviare COMMIT, i partecipanti restano bloccati in uno stato incerto. È un protocollo bloccante.</p>
 <p><strong>Alternative moderne:</strong>
-- <strong>Saga pattern</strong>: serie di transazioni locali con compensazioni (vedi Kafka)
+- <strong>Saga pattern</strong>: serie di transazioni locali con compensazioni (orchestrate o coreografate via eventi, es. su Kafka)
 - <strong>Optimistic concurrency control</strong>: versioning senza lock, retry su conflitto
 - <strong>Raft/Paxos consensus</strong>: per sistemi come CockroachDB e Spanner</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25145,27 +25145,29 @@
 <p><strong>Sintomo</strong>: L'applicazione scrive un record e immediatamente tenta di leggerlo, ma ottiene il valore precedente o un errore "not found".</p>
 <p><strong>Causa</strong>: Il database è configurato in modalità AP/eventually consistent (es. Cassandra con consistency level ONE, DynamoDB in eventual read mode). La replica non ha ancora propagato la scrittura al nodo letto.</p>
 <p><strong>Soluzione</strong>: Usare un consistency level più forte per le letture critiche, o applicare read-your-writes routing verso la replica primaria.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>-- Cassandra: aumentare consistency level per letture critiche
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>SELECT * FROM ordini WHERE id = 123 USING CONSISTENCY QUORUM;
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>-- DynamoDB: forzare strong consistent read
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>aws dynamodb get-item \
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>  --table-name Ordini \
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>  --key '{"id": {"S": "123"}}' \
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  --consistent-read
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>-- Cassandra (cqlsh): il consistency level è di sessione/driver, non una clausola CQL
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>CONSISTENCY QUORUM;
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>SELECT * FROM ordini WHERE id = 123;
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>-- DynamoDB: forzare strong consistent read
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>aws dynamodb get-item \
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>  --table-name Ordini \
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>  --key '{"id": {"S": "123"}}' \
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>  --consistent-read
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-2-transazione-bloccata-indefinitamente-2pc-coordinator-failure">Scenario 2 — Transazione bloccata indefinitamente (2PC coordinator failure)<a class="headerlink" href="#scenario-2-transazione-bloccata-indefinitamente-2pc-coordinator-failure" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo</strong>: Una transazione distribuita risulta in stato "in-doubt" o "prepared" e non avanza né in commit né in rollback. I lock restano acquisiti, bloccando altre operazioni.</p>
 <p><strong>Causa</strong>: Il coordinator del 2PC è crashato dopo la fase PREPARE ma prima di inviare COMMIT o ROLLBACK. I partecipanti attendono istruzioni che non arrivano mai.</p>
 <p><strong>Soluzione</strong>: Risolvere manualmente la transazione in-doubt dopo aver verificato lo stato su tutti i nodi, oppure abilitare il recovery automatico del coordinator.</p>
-<div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- PostgreSQL: visualizzare transazioni in-doubt (prepared)</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">gid</span><span class="p">,</span><span class="w"> </span><span class="n">prepared</span><span class="p">,</span><span class="w"> </span><span class="k">owner</span><span class="p">,</span><span class="w"> </span><span class="k">database</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_prepared_xacts</span><span class="p">;</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1">-- Completare o annullare manualmente</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">COMMIT</span><span class="w"> </span><span class="n">PREPARED</span><span class="w"> </span><span class="s1">'transaction_id_123'</span><span class="p">;</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1">-- oppure</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">ROLLBACK</span><span class="w"> </span><span class="n">PREPARED</span><span class="w"> </span><span class="s1">'transaction_id_123'</span><span class="p">;</span>
+<div class="language-sql highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1">-- PostgreSQL: richiede max_prepared_transactions &gt; 0 (default 0: PREPARE TRANSACTION disabilitato)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1">-- Visualizzare transazioni in-doubt (prepared)</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="k">SELECT</span><span class="w"> </span><span class="n">gid</span><span class="p">,</span><span class="w"> </span><span class="n">prepared</span><span class="p">,</span><span class="w"> </span><span class="k">owner</span><span class="p">,</span><span class="w"> </span><span class="k">database</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">pg_prepared_xacts</span><span class="p">;</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="c1">-- Completare o annullare manualmente</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">COMMIT</span><span class="w"> </span><span class="n">PREPARED</span><span class="w"> </span><span class="s1">'transaction_id_123'</span><span class="p">;</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1">-- oppure</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="k">ROLLBACK</span><span class="w"> </span><span class="n">PREPARED</span><span class="w"> </span><span class="s1">'transaction_id_123'</span><span class="p">;</span>
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-3-violazione-di-consistency-in-scritture-concorrenti-lost-update">Scenario 3 — Violazione di consistency in scritture concorrenti (lost update)<a class="headerlink" href="#scenario-3-violazione-di-consistency-in-scritture-concorrenti-lost-update" title="Permanent link">&para;</a></h3>
@@ -25189,17 +25191,18 @@
 <p><strong>Sintomo</strong>: Dopo un crash o riavvio improvviso del database, alcune transazioni con COMMIT confermato risultano assenti al riavvio. Il database non segnala errori ma i dati sono mancanti.</p>
 <p><strong>Causa</strong>: La durability è stata degradata disabilitando <code>fsync</code> o <code>synchronous_commit</code> per ottimizzare le performance. I COMMIT vengono confermati al client prima che i dati siano scritti fisicamente su disco.</p>
 <p><strong>Soluzione</strong>: Verificare e ripristinare la configurazione di durabilità. In PostgreSQL, <code>synchronous_commit=off</code> è accettabile solo per operazioni non critiche (bulk import, log analytics).</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>--<span class="w"> </span>Verificare<span class="w"> </span>configurazione<span class="w"> </span>PostgreSQL
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Verificare configurazione PostgreSQL</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SHOW synchronous_commit;"</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SHOW fsync;"</span>
 </span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>--<span class="w"> </span>Verificare<span class="w"> </span>a<span class="w"> </span>livello<span class="w"> </span>di<span class="w"> </span>sessione<span class="w"> </span>o<span class="w"> </span>transazione
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SET synchronous_commit = on;"</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># Nel file postgresql.conf — valori sicuri per produzione:</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># fsync = on</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># synchronous_commit = on</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># full_page_writes = on</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># Ripristinare il valore globale (un SET in un psql -c vale solo per quella sessione)</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"ALTER SYSTEM SET synchronous_commit = on;"</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>psql<span class="w"> </span>-c<span class="w"> </span><span class="s2">"SELECT pg_reload_conf();"</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># Nel file postgresql.conf — valori sicuri per produzione:</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="c1"># fsync = on</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="c1"># synchronous_commit = on</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="c1"># full_page_writes = on</span>
 </span></code></pre></div>
 <hr />
 <h2 id="relazioni">Relazioni<a class="headerlink" href="#relazioni" title="Permanent link">&para;</a></h2>
