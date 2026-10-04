@@ -7,9 +7,10 @@ search_keywords: [python, python microservizi, python microservices, fastapi, fa
 parent: dev/linguaggi/_index
 related: [dev/linguaggi/go, dev/integrazioni/database-patterns, dev/runtime/resource-tuning]
 official_docs: https://fastapi.tiangolo.com/
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Python per Microservizi
@@ -18,7 +19,7 @@ last_updated: 2026-03-29
 
 Python è il linguaggio di elezione per microservizi ML/AI, pipeline di dati, scripting di automazione e backend REST dove la velocity di sviluppo e l'ecosistema di librerie contano più della latenza bruta. Il framework di riferimento moderno è **FastAPI**: async nativo, validazione Pydantic v2 con zero overhead, generazione automatica di documentazione OpenAPI/Swagger, e Dependency Injection dichiarativa. FastAPI si basa su **Starlette** per l'ASGI layer e **Pydantic** per la validazione — due librerie production-grade con anni di adozione enterprise.
 
-Il deployment standard prevede **Uvicorn** come ASGI server (event loop asyncio con uvloop opzionale per performance +20-40%) dietro **Gunicorn** come process manager: Gunicorn gestisce il ciclo di vita dei worker, i segnali OS, e il pre-forking. Ogni worker Uvicorn è un processo Python indipendente che gestisce richieste async internamente, bypassando di fatto il GIL per I/O-bound workload.
+Il deployment prevede **Uvicorn** come ASGI server (event loop asyncio con uvloop opzionale per performance +20-40%). Su VM/bare metal si affianca spesso **Gunicorn** come process manager (ciclo di vita dei worker, segnali OS, pre-forking, riciclo con `--max-requests`); su Kubernetes è comune un solo processo Uvicorn per container e scalare con le repliche del Deployment (vedi sezione Deployment). Ogni worker Uvicorn è un processo Python indipendente che gestisce richieste async internamente: più processi aggirano il GIL, un singolo processo async lo rende irrilevante per workload I/O-bound.
 
 Quando usare Python: integrazione ML (TensorFlow, PyTorch, scikit-learn, LangChain), pipeline ETL e data engineering, API REST rapidamente iterabili, team con forte competenza Python esistente, integrazione con ecosistema data science. Quando preferire Go o Java: latenza p99 sub-millisecondo, footprint memoria critico (<30MB), sidecar Kubernetes, workload CPU-intensive senza librerie C (NumPy/SciPy) — in quel caso il GIL è un vincolo reale.
 
@@ -31,7 +32,7 @@ Quando usare Python: integrazione ML (TensorFlow, PyTorch, scikit-learn, LangCha
 Il GIL è un mutex nel CPython interpreter che garantisce che solo un thread esegua bytecode Python alla volta. Non è un bug: protegge la reference counting del garbage collector. Le implicazioni pratiche per i microservizi sono:
 
 - **I/O-bound workload (HTTP, DB, file):** il GIL viene rilasciato durante operazioni I/O syscall → thread multipli o async/await sono efficaci
-- **CPU-bound workload puro (calcolo numerico, parsing JSON massiccio):** il GIL serializza i thread → usare `multiprocessing`, worker Gunicorn separati, o librerie con release del GIL (NumPy, Pandas operano in C senza GIL)
+- **CPU-bound workload puro (calcolo numerico, parsing JSON massiccio):** il GIL serializza i thread → usare `multiprocessing`, worker Gunicorn separati, o librerie C-extension che rilasciano il GIL nelle operazioni pesanti (molte routine NumPy; Pandas solo in parte)
 
 ```
 Thread 1: [Python bytecode] ──── [rilascia GIL] ──── [attesa I/O] ──────────
@@ -40,7 +41,10 @@ Thread 2:                         [acquisce GIL] ─── [Python bytecode] ─
 ```
 
 !!! warning "CPU-bound e thread — anti-pattern comune"
-    Usare `ThreadPoolExecutor` per operazioni CPU-bound in Python non porta benefici di parallelismo: i thread si serializzano sul GIL. Per CPU-bound vero usare `ProcessPoolExecutor` o `multiprocessing.Pool`, oppure librerie C-extension che rilasciano il GIL (NumPy, pandas, Pillow per image processing).
+    Usare `ThreadPoolExecutor` per operazioni CPU-bound in Python non porta benefici di parallelismo: i thread si serializzano sul GIL. Per CPU-bound vero usare `ProcessPoolExecutor` o `multiprocessing.Pool`, oppure librerie C-extension che rilasciano il GIL (molte routine NumPy, Pillow per image processing).
+
+!!! note "Free-threaded Python (PEP 703)"
+    Dal 3.13 esiste una build CPython *free-threaded* (senza GIL, `python3.13t`), sperimentale; dal 3.14 è supportata ufficialmente ma resta opzionale e non è il default. Molte C-extension devono dichiarare compatibilità, altrimenti il GIL viene riattivato all'import. Per i microservizi il modello consolidato resta multi-processo + asyncio; valutare la build free-threaded solo dopo aver verificato tutte le dipendenze.
 
 ### asyncio e Event Loop
 
@@ -67,7 +71,10 @@ async def fetch_dashboard(user_id: str):
 ```
 
 !!! warning "Bloccare il loop — anti-pattern critico"
-    Qualsiasi operazione bloccante sincrona in una coroutine congela l'intero event loop e tutte le richieste in corso. `time.sleep()`, `requests.get()`, `open()` per file grandi — tutti bloccanti. Usare `asyncio.sleep()`, `httpx.AsyncClient`, `aiofiles`. Per codice legacy bloccante, wrappare con `loop.run_in_executor()`.
+    Qualsiasi operazione bloccante sincrona in una coroutine congela l'intero event loop e tutte le richieste in corso. `time.sleep()`, `requests.get()`, `open()` per file grandi — tutti bloccanti. Usare `asyncio.sleep()`, `httpx.AsyncClient`, `aiofiles`. Per codice legacy bloccante, wrappare con `loop.run_in_executor()` o `asyncio.to_thread()`.
+
+!!! tip "`def` vs `async def` negli handler FastAPI"
+    Un handler dichiarato con `def` (sync) viene eseguito da FastAPI in un thread pool (AnyIO, 40 thread di default): non blocca il loop, ma è limitato da quel pool. Un handler `async def` gira direttamente sul loop: deve usare solo librerie async, altrimenti blocca tutto. Regola: `async def` con driver async (asyncpg, httpx); `def` se si chiama codice bloccante.
 
 ---
 
@@ -78,7 +85,7 @@ async def fetch_dashboard(user_id: str):
 ```python
 # main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
@@ -153,10 +160,15 @@ class OrderStatus(str, Enum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
 
+class OrderItem(BaseModel):
+    product_id: uuid.UUID
+    quantity: int = Field(ge=1, le=1000)
+    unit_price: float = Field(gt=0)
+
 class CreateOrderRequest(BaseModel):
     # Field con validazione inline
-    customer_email: EmailStr
-    items: list["OrderItem"] = Field(min_length=1, max_length=100)
+    customer_email: EmailStr  # richiede il pacchetto email-validator
+    items: list[OrderItem] = Field(min_length=1, max_length=100)
     shipping_address: str = Field(min_length=10, max_length=500)
     notes: Optional[str] = Field(default=None, max_length=1000)
 
@@ -167,11 +179,6 @@ class CreateOrderRequest(BaseModel):
         if total > 100_000:
             raise ValueError("Ordine supera il limite di 100.000€")
         return items
-
-class OrderItem(BaseModel):
-    product_id: uuid.UUID
-    quantity: int = Field(ge=1, le=1000)
-    unit_price: float = Field(gt=0)
 
 class OrderResponse(BaseModel):
     id: uuid.UUID
@@ -367,11 +374,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
 )
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, String, Float, DateTime, Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import String, Float, DateTime, Enum as SAEnum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Engine async — usa asyncpg come driver
 engine = create_async_engine(
@@ -392,17 +398,22 @@ async_session_factory = async_sessionmaker(
 class Base(DeclarativeBase):
     pass
 
-# Modello ORM
+def utcnow() -> datetime:
+    # datetime.utcnow() è deprecato dal 3.12: usare datetime timezone-aware
+    return datetime.now(timezone.utc)
+
+# Modello ORM — stile SQLAlchemy 2.0 (Mapped + mapped_column).
+# Con DeclarativeBase, annotazioni senza Mapped[] + Column() sollevano ArgumentError.
 class Order(Base):
     __tablename__ = "orders"
 
-    id: uuid.UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    customer_email: str = Column(String(255), nullable=False, index=True)
-    status: str = Column(SAEnum(OrderStatus), nullable=False, default="pending")
-    total_amount: float = Column(Float, nullable=False)
-    created_at: datetime = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: datetime = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    customer_email: Mapped[str] = mapped_column(String(255), index=True)
+    status: Mapped[OrderStatus] = mapped_column(SAEnum(OrderStatus), default=OrderStatus.PENDING)
+    total_amount: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
 
 # Query async — stile ORM
@@ -431,7 +442,7 @@ async def bulk_update_status(
     result = await db.execute(
         update(Order)
         .where(Order.id.in_(order_ids))
-        .values(status=new_status, updated_at=datetime.utcnow())
+        .values(status=new_status, updated_at=utcnow())
         .returning(Order.id)
     )
     return len(result.fetchall())
@@ -454,19 +465,20 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-### Motor — MongoDB Async
+### PyMongo Async — MongoDB Async
+
+!!! warning "Motor è deprecato"
+    MongoDB ha deprecato **Motor** (maggio 2025, fine supporto maggio 2026). Il sostituto ufficiale è l'API async nativa di PyMongo (`AsyncMongoClient`, da PyMongo 4.13): stessa forma d'uso, senza il layer thread-pool di Motor. Per codice nuovo usare PyMongo Async; per migrare da Motor vedere la migration guide ufficiale.
 
 ```python
-from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
+from pymongo import AsyncMongoClient
 from typing import Optional
 
-# Client Motor (thread-safe, condiviso tra richieste)
-mongo_client = AsyncIOMotorClient(settings.MONGODB_URL)
-db_motor = mongo_client[settings.MONGODB_DATABASE]
+# Un solo client per processo, condiviso tra richieste (creare e chiudere nel lifespan)
+mongo_client = AsyncMongoClient(settings.MONGODB_URL)
+db_mongo = mongo_client[settings.MONGODB_DATABASE]
 
-# Collection tipizzata
-events_collection = db_motor["events"]
+events_collection = db_mongo["events"]
 
 async def save_event(event: dict) -> str:
     result = await events_collection.insert_one(event)
@@ -500,7 +512,7 @@ async def find_events_by_aggregate(
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
-RUN pip install --no-cache-dir uv  # uv è 10-100x più veloce di pip
+RUN pip install --no-cache-dir uv  # uv: installer/resolver in Rust, molto più veloce di pip
 
 COPY pyproject.toml uv.lock ./
 # Installazione dipendenze in layer separato per cache Docker
@@ -527,9 +539,12 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-# Gunicorn come process manager, Uvicorn come worker class
+# Gunicorn come process manager, Uvicorn come worker class.
+# uvicorn.workers.UvicornWorker è deprecato (uvicorn >= 0.30): usare il pacchetto
+# dedicato `uvicorn-worker` (aggiungerlo alle dipendenze). Il numero di worker
+# può essere sovrascritto da WEB_CONCURRENCY (letto da Gunicorn).
 CMD ["gunicorn", "src.main:app", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--worker-class", "uvicorn_worker.UvicornWorker", \
      "--workers", "2", \
      "--bind", "0.0.0.0:8000", \
      "--timeout", "30", \
@@ -555,11 +570,15 @@ CMD ["gunicorn", "src.main:app", \
 # 4 workers = 320-600 MB
 # → calibrare resources.requests.memory di conseguenza
 
-# Variabile d'ambiente per configurazione dinamica
-GUNICORN_CMD_ARGS="--workers=2 --worker-class=uvicorn.workers.UvicornWorker"
+# Variabili d'ambiente per configurazione dinamica (la CLI ha precedenza su WEB_CONCURRENCY)
+WEB_CONCURRENCY=2
+GUNICORN_CMD_ARGS="--worker-class=uvicorn_worker.UvicornWorker"
 
-# Alternativa: Uvicorn diretto (senza Gunicorn) — solo per dev o single-container
-uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1 --loop uvloop
+# Alternativa: Uvicorn diretto, senza Gunicorn. Dal 0.30 --workers N ha un
+# supervisor integrato che riavvia i worker morti. Su Kubernetes con 1 worker per pod
+# la scalabilità e il restart sono già gestiti da Deployment e kubelet.
+# (uvloop è usato in automatico se installato, es. uvicorn[standard])
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
 ```yaml
@@ -578,7 +597,7 @@ spec:
           ports:
             - containerPort: 8000
           env:
-            - name: WORKERS
+            - name: WEB_CONCURRENCY   # numero worker Gunicorn (se non fissato da --workers)
               value: "2"
             - name: DATABASE_URL
               valueFrom:
@@ -607,7 +626,7 @@ spec:
 ```
 
 !!! tip "uvloop — boost performance event loop"
-    `uvloop` è un'implementazione dell'event loop asyncio basata su `libuv` (la stessa usata da Node.js). Sostituisce l'event loop Python puro con +20-40% throughput per I/O-bound. Installare con `pip install uvloop` e usare `--loop uvloop` con Uvicorn, oppure dichiararlo in `pyproject.toml` come dipendenza opzionale.
+    `uvloop` è un'implementazione dell'event loop asyncio basata su `libuv` (la stessa usata da Node.js). Sostituisce l'event loop Python puro con +20-40% throughput per I/O-bound. Si installa con `pip install uvloop` (o `uvicorn[standard]`): Uvicorn lo usa in automatico se presente (`--loop uvloop` per forzarlo). Non disponibile su Windows.
 
 ---
 
@@ -645,7 +664,7 @@ class OrderService:
     Per dipendenze con stato (es. service con configurazione iniettata), usare classi con `__call__`. Questo permette di iniettare sottocomponenti (repository, publisher) mantenendo il ciclo di vita gestito da FastAPI.
 
 !!! warning "N+1 query con ORM — da evitare esplicitamente"
-    SQLAlchemy async non fa eager loading automatico per relazioni. Una lista di `Order` con `items` lazy-loaded genera N+1 query. Usare sempre `selectinload()` o `joinedload()` per relazioni necessarie: `select(Order).options(selectinload(Order.items))`.
+    Le relazioni ORM sono lazy per default. In sync una lista di `Order` con `items` genera N+1 query; in async l'accesso lazy è peggio: solleva `MissingGreenlet` perché l'I/O implicito non è permesso fuori dal contesto `await`. Caricare esplicitamente le relazioni con `selectinload()` o `joinedload()` per relazioni necessarie: `select(Order).options(selectinload(Order.items))`.
 
 **Pagination standardizzata:** implementare sempre cursore o offset/limit nei list endpoint. Returnare sempre il count totale e i metadati di paginazione nel response model.
 
@@ -736,7 +755,7 @@ pip install memory-profiler
 **Soluzione:**
 ```bash
 # Ridurre workers nel Deployment env
-- name: WORKERS
+- name: WEB_CONCURRENCY
   value: "1"  # da 4 a 1 se memory limit è 256Mi
 
 # Oppure aumentare memory limit
@@ -763,22 +782,25 @@ gunicorn ... --max-requests 1000 --max-requests-jitter 100
 # Postgres default max_connections = 100 → dimensionare di conseguenza
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    str(settings.DATABASE_URL),  # PostgresDsn non è str: convertire
     pool_size=5,          # connessioni persistenti per worker
     max_overflow=10,      # connessioni temporanee extra
     pool_timeout=30,      # wait massimo per connessione dal pool
     pool_pre_ping=True,   # verifica connessioni stale
 )
 
-# Se si usa PgBouncer (connection pooler) davanti a Postgres:
-# pool_size=1, max_overflow=0 — PgBouncer gestisce il pooling reale
+# Se si usa PgBouncer in transaction mode davanti a Postgres, il pooling reale è
+# lato PgBouncer: usare poolclass=NullPool (o un pool piccolo) e disabilitare i
+# prepared statement di asyncpg, che non sopravvivono al cambio di connessione:
+#   create_async_engine(url, poolclass=NullPool,
+#       connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0})
 ```
 
 ---
 
 ### Import circolari — `ImportError: cannot import name X from Y`
 
-**Sintomo:** Errore al startup `ImportError: cannot import name 'User' from 'src.models'`, funziona in sviluppo ma fallisce con Gunicorn multi-worker.
+**Sintomo:** Errore al startup `ImportError: cannot import name 'User' from 'src.models'`, spesso dipendente dall'ordine di import (funziona lanciando un entrypoint, fallisce con un altro, es. Gunicorn o i test).
 
 **Causa:** Import circolari tra moduli Python — frequente con SQLAlchemy models, Pydantic schemas, e dipendenze FastAPI.
 
@@ -809,7 +831,7 @@ if TYPE_CHECKING:
     **Approfondimento completo →** [Go per Microservizi](go.md)
 
 ??? info "Database Patterns — Async e Connection Pooling"
-    SQLAlchemy 2 async e asyncpg si integrano con i pattern di repository, Unit of Work, e transazioni distribuite descritti in questa sezione.
+    SQLAlchemy 2 async e asyncpg si integrano con i pattern di repository, Unit of Work e gestione transazioni descritti in quel file.
 
     **Approfondimento completo →** [Database Patterns](../integrazioni/database-patterns.md)
 
@@ -827,7 +849,7 @@ if TYPE_CHECKING:
 - [SQLAlchemy 2.0 Async](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html) — ORM async ufficiale
 - [Uvicorn Deployment](https://www.uvicorn.org/deployment/) — configurazione Uvicorn e Gunicorn
 - [Gunicorn Configuration](https://docs.gunicorn.org/en/stable/configure.html) — worker types, tuning
-- [Motor Documentation](https://motor.readthedocs.io/en/stable/) — MongoDB driver async Python
+- [PyMongo Async API](https://pymongo.readthedocs.io/en/stable/async-tutorial.html) — MongoDB driver async Python (successore di Motor)
 - [structlog](https://www.structlog.org/en/stable/) — structured logging per Python
 - [pydantic-settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/) — gestione configurazione
 - [asyncio — Python docs](https://docs.python.org/3/library/asyncio.html) — event loop, coroutine, task
