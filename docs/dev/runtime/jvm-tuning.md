@@ -7,19 +7,20 @@ search_keywords: [jvm tuning, jvm kubernetes, heap sizing, garbage collector, G1
 parent: dev/runtime/_index
 related: [dev/linguaggi/java-spring-boot, dev/linguaggi/java-quarkus, containers/kubernetes/resource-management]
 official_docs: https://docs.oracle.com/en/java/javase/21/gctuning/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # JVM Tuning per Kubernetes
 
 ## Panoramica
 
-La JVM (Java Virtual Machine) non era originariamente progettata per girare dentro container con limiti di memoria rigidi: le versioni pre-Java 10 leggevano la RAM dell'host ignorando i cgroup, causando heap allocation sbagliate e OOM kill silenziosi. Da **Java 11+** la JVM è pienamente **container-aware**: usa automaticamente i cgroup per determinare la memoria disponibile e calcola l'heap di default come 25% della RAM del container. Il tuning JVM in Kubernetes richiede di gestire quattro aree: (1) **heap sizing** corretto rispetto ai `limits` K8s, (2) **scelta del Garbage Collector** in base ai requisiti di latenza, (3) **gestione della memoria non-heap** (Metaspace, Code Cache, thread stack), (4) **profiling e diagnostica** per identificare colli di bottiglia senza interrompere il servizio. Queste configurazioni si applicano a qualsiasi workload JVM: Spring Boot, Quarkus in modalità JVM, Micronaut, Jakarta EE.
+La JVM (Java Virtual Machine) non era originariamente progettata per girare dentro container con limiti di memoria rigidi: le versioni pre-Java 10 leggevano la RAM dell'host ignorando i cgroup, causando heap allocation sbagliate e OOM kill silenziosi. Da **Java 10** (backport in 8u191+) la JVM è **container-aware**: usa automaticamente i cgroup per determinare la memoria disponibile e calcola l'heap di default come 25% della RAM del container. Il tuning JVM in Kubernetes richiede di gestire quattro aree: (1) **heap sizing** corretto rispetto ai `limits` K8s, (2) **scelta del Garbage Collector** in base ai requisiti di latenza, (3) **gestione della memoria non-heap** (Metaspace, Code Cache, thread stack), (4) **profiling e diagnostica** per identificare colli di bottiglia senza interrompere il servizio. Queste configurazioni si applicano a qualsiasi workload JVM: Spring Boot, Quarkus in modalità JVM, Micronaut, Jakarta EE.
 
 !!! warning "Java < 11 in container"
-    Se usi ancora Java 8 o 10, la JVM legge la RAM dell'host, non quella del container. Su un nodo da 64 GB, la JVM si alloca un heap da ~16 GB anche se il Pod ha limit di 512 MB → OOM kill immediato. Migra a Java 17+ o usa `-XX:+UseContainerSupport` (backportato in Java 8u191+).
+    Se usi ancora Java 8 precedente a 8u191, la JVM legge la RAM dell'host, non quella del container. Su un nodo da 64 GB, la JVM si alloca un heap da ~16 GB anche se il Pod ha limit di 512 MB → OOM kill immediato. Migra a Java 17+ (meglio 21/25) o aggiorna a 8u191+, dove `-XX:+UseContainerSupport` è attivo di default.
 
 ---
 
@@ -27,15 +28,18 @@ La JVM (Java Virtual Machine) non era originariamente progettata per girare dent
 
 ### Container-Awareness: come la JVM legge i limiti K8s
 
-Da Java 11, il flag `-XX:+UseContainerSupport` è **attivo per default**. La JVM interroga i cgroup v1/v2 del container per determinare:
+Da Java 10 (e 8u191+), il flag `-XX:+UseContainerSupport` è **attivo per default**. La JVM interroga i cgroup v1/v2 del container per determinare:
 
 | Parametro JVM | Fonte dati | Default |
 |---|---|---|
-| Memoria massima heap | `memory.limit_in_bytes` (cgroup) | 25% della RAM container |
-| CPU disponibili | `cpu.cfs_quota_us / cpu.cfs_period_us` | Numero vCPU visibili nel container |
+| Memoria massima heap | `memory.limit_in_bytes` (cgroup v1) / `memory.max` (v2) | 25% della RAM container |
+| CPU disponibili | `cpu.cfs_quota_us / cpu.cfs_period_us` (v1) / `cpu.max` (v2), arrotondato per eccesso | `limits.cpu` del Pod (se assente: CPU del nodo) |
 | GC thread count | CPU disponibili | Proporzionale ai core |
 
 La **formula di default** (25%) è troppo conservativa per la maggior parte dei microservizi. Il tuning corretto prevede di alzarla al 50-75% a seconda del profilo dell'applicazione.
+
+!!! warning "Il GC di default dipende dalle risorse del container"
+    La JVM sceglie G1 solo su una macchina "server-class": **≥2 CPU disponibili e ≥~1792 MB di RAM**. Un Pod con `limits.cpu: 1` o `limits.memory: 1Gi` ottiene silenziosamente **SerialGC** (pause stop-the-world, un solo thread GC). Per questo i flag di questa pagina impostano `-XX:+UseG1GC` esplicitamente: verifica il GC reale con `java -XX:+PrintFlagsFinal -version | grep Use.*GC` dentro il container.
 
 ### Memoria JVM: le 4 regioni
 
@@ -70,7 +74,7 @@ La formula alloca il 65% della RAM al heap e tiene 35% + 50 MB di buffer per off
 Heap = (1024 MB × 0.65) - 50 MB = ~615 MB
 ```
 
-Equivalente JVM flag: `-XX:MaxRAMPercentage=65.0`
+Il flag JVM `-XX:MaxRAMPercentage=65.0` ne è l'approssimazione senza il termine fisso: dà ~665 MB su 1 GiB (la differenza di 50 MB conta solo sui container piccoli).
 
 **Linee guida per percentuale:**
 
@@ -90,8 +94,8 @@ Equivalente JVM flag: `-XX:MaxRAMPercentage=65.0`
 
 | GC | Flag | Java Min | Latenza | Throughput | Use case |
 |---|---|---|---|---|---|
-| **G1GC** | `-XX:+UseG1GC` | 9 (default da 9) | ~10-50ms pause | Alto | Default per la maggior parte dei microservizi |
-| **ZGC** | `-XX:+UseZGC` | 15 (prod), 21 (LTS) | <1ms (sub-ms) | Leggermente inferiore | Servizi latency-sensitive, heap >4 GB |
+| **G1GC** | `-XX:+UseG1GC` | 9 (default da 9, solo su macchine server-class) | ~10-50ms pause | Alto | Default per la maggior parte dei microservizi |
+| **ZGC** | `-XX:+UseZGC` | 15 (prod); generazionale da 21; solo generazionale da 24 | <1ms (sub-ms) | Leggermente inferiore | Servizi latency-sensitive, heap >4 GB |
 | **Shenandoah** | `-XX:+UseShenandoahGC` | 12 (OpenJDK/Red Hat) | <5ms | Medio | Alternative a ZGC su Red Hat/OpenShift |
 | **Serial GC** | `-XX:+UseSerialGC` | tutti | Alte pause | Basso | Container con <256 MB heap, CLI tools |
 | **Parallel GC** | `-XX:+UseParallelGC` | tutti | Alte pause | Massimo | Batch, processi offline |
@@ -106,7 +110,6 @@ JAVA_OPTS="-XX:+UseG1GC \
   -XX:MaxRAMPercentage=65.0 \
   -XX:InitialRAMPercentage=50.0 \
   -XX:MaxGCPauseMillis=200 \
-  -XX:G1HeapRegionSize=4m \
   -XX:+G1UseAdaptiveIHOP \
   -XX:InitiatingHeapOccupancyPercent=45 \
   -Xss512k \
@@ -148,14 +151,16 @@ spec:
 ```
 
 !!! tip "G1HeapRegionSize"
-    G1GC divide l'heap in regioni. La dimensione ideale è: `heap / 2048` regioni. Con heap da 600 MB → 300 KB (usa il default). Con heap da 4 GB → 2 MB. Con heap da 8 GB → 4 MB. Impostare manualmente `-XX:G1HeapRegionSize` solo con heap >4 GB.
+    G1GC divide l'heap in regioni (potenza di 2, da 1 a 32 MB) puntando a ~2048 regioni: `region ≈ heap / 2048`, arrotondato. Con heap da 600 MB → 1 MB (minimo). Con heap da 4 GB → 2 MB. Con heap da 8 GB → 4 MB. Il default va bene quasi sempre; imposta `-XX:G1HeapRegionSize` solo per mitigare allocazioni humongous (vedi Scenario 4).
+    `InitiatingHeapOccupancyPercent` è solo il valore iniziale: con `G1UseAdaptiveIHOP` (default) G1 lo adatta a runtime.
 
 ### ZGC — Configurazione per Latenza Sub-ms (Java 21)
 
-ZGC è il collector ottimale per servizi con SLA di latenza stretti (<10ms p99). Da Java 21 LTS è pienamente maturo e generazionale (Generational ZGC).
+ZGC è il collector ottimale per servizi con SLA di latenza stretti (<10ms p99). Da Java 21 è disponibile in versione generazionale (Generational ZGC, opt-in con `-XX:+ZGenerational`, molto più efficiente in CPU/memoria della versione non generazionale); da Java 23 è il default di `-XX:+UseZGC` e da **Java 24** la modalità non generazionale è rimossa: `-XX:+ZGenerational` è obsoleto e va tolto (la JVM stampa un warning).
 
 ```bash
 # ZGC per servizio latency-sensitive (container 2 GiB, Java 21)
+# Su Java 23+ rimuovere -XX:+ZGenerational
 JAVA_OPTS="-XX:+UseZGC \
   -XX:+ZGenerational \
   -XX:MaxRAMPercentage=60.0 \
@@ -179,7 +184,7 @@ JAVA_OPTS="-XX:+UseZGC \
 
 ### Shenandoah — Red Hat / OpenShift
 
-Shenandoah è sviluppato da Red Hat e incluso nelle distribuzioni OpenJDK di Red Hat. Simile a ZGC per caratteristiche di latenza, ma con un modello di pause leggermente diverso.
+Shenandoah è sviluppato da Red Hat e incluso in OpenJDK 15+ (build Red Hat, Adoptium/Temurin e altre; **non** nelle build Oracle JDK). Simile a ZGC per caratteristiche di latenza, ma con un modello di pause leggermente diverso.
 
 ```bash
 # Shenandoah (solo OpenJDK Red Hat / Adoptium con supporto)
@@ -239,14 +244,16 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
 
 ```bash
 # Code Cache — Default 240 MB in JDK 11+, aumentare per app grandi
+-XX:ReservedCodeCacheSize=128m   # Riduce il footprint in container piccoli (usato negli esempi di questa pagina)
 -XX:ReservedCodeCacheSize=256m   # Per microservizi standard
 -XX:ReservedCodeCacheSize=512m   # Per app grandi con molti metodi hot (es. Hibernate ORM)
--XX:+UseCodeCacheFlushing         # Permette flush parziale se si avvicina al limite
 ```
 
 ```bash
-# Monitoraggio Code Cache via JMX/jcmd
+# Monitoraggio Code Cache: richiede Native Memory Tracking attivo all'avvio
+# (-XX:NativeMemoryTracking=summary, overhead ~5-10%), altrimenti jcmd risponde "not enabled"
 jcmd <pid> VM.native_memory summary
+# Alternativa leggera: jcmd <pid> Compiler.codecache
 # Cerca "Code" nella sezione Non-heap:
 # Code (CodeCache + CompileQueue + CodeHeap)
 ```
@@ -256,7 +263,7 @@ jcmd <pid> VM.native_memory summary
 Ogni thread JVM alloca uno stack. Con `-Xss` si controlla la dimensione per thread.
 
 ```bash
-# Default: 512k-1MB per thread (dipende da OS e JVM version)
+# Default: 1 MB per thread su Linux x64 (dipende da OS e architettura)
 # Per microservizi con molti thread (Tomcat, Jetty):
 -Xss512k     # 512 KB per thread — sicuro per la maggior parte dei casi
 
@@ -266,9 +273,8 @@ Ogni thread JVM alloca uno stack. Con `-Xss` si controlla la dimensione per thre
 
 **Virtual Threads (Java 21 + Project Loom):**
 
-```java
-// Spring Boot 3.2+ — abilitare Virtual Threads
-// application.yml
+```yaml
+# Spring Boot 3.2+ (Java 21+) — application.yml
 spring:
   threads:
     virtual:
@@ -276,22 +282,26 @@ spring:
 
 # Con Virtual Threads: thread stack overhead è trascurabile
 # Non è più necessario dimensionare il pool di thread Tomcat
-# -Xss può restare al default — i virtual thread sono leggeri (<KB)
+# -Xss riguarda solo i thread di piattaforma; i virtual thread hanno stack
+# nell'heap (pochi KB), quindi migliaia di thread pesano sull'heap, non sull'off-heap
 ```
+
+!!! warning "Pinning su `synchronized` (Java 21-23)"
+    In Java 21-23 un virtual thread che blocca dentro un blocco `synchronized` (o una chiamata nativa) **blocca anche il carrier thread** (pinning), azzerando il beneficio con driver/librerie datate. Da **Java 24** (JEP 491) `synchronized` non causa più pinning. Diagnosi: `-Djdk.tracePinnedThreads=full` (Java 21-23) o l'evento JFR `jdk.VirtualThreadPinned`.
 
 ### JVM 17 vs 21 — Differenze Rilevanti per Container
 
-| Feature | Java 17 (LTS) | Java 21 (LTS) |
-|---|---|---|
-| Generational ZGC | No | Sì (`-XX:+ZGenerational`) |
-| Virtual Threads | Preview | GA (Project Loom) |
-| Compact Heap | Parziale | Migliorato |
-| Sealed Classes | GA | GA |
-| Pattern Matching | Parziale | GA |
-| ZGC production-ready | No | Sì |
+| Feature | Java 17 (LTS) | Java 21 (LTS) | Java 25 (LTS) |
+|---|---|---|---|
+| ZGC production-ready | Sì (non generazionale) | Sì | Sì |
+| Generational ZGC | No | Opt-in (`-XX:+ZGenerational`) | Unica modalità ZGC |
+| Virtual Threads | No (preview solo in 19/20) | GA (Project Loom), con pinning su `synchronized` | GA, pinning su `synchronized` risolto (JEP 491, da 24) |
+| Compact object headers | No | No | Sì, opt-in (`-XX:+UseCompactObjectHeaders`): meno heap per oggetto |
+| Shenandoah generazionale | No | No | Prodotto (`-XX:ShenandoahGCMode=generational`) |
+| Class Data Sharing automatico | No | Sì (`-XX:+AutoCreateSharedArchive`, da 19) | Sì, più AOT cache (`-XX:AOTCache`, Project Leyden) |
 
-!!! tip "Scegli Java 21 per nuovi progetti"
-    Java 21 è l'LTS corrente (fino al 2031). I miglioramenti al GC (ZGC generazionale) e i Virtual Threads rendono Java 21 superiore a Java 17 per microservizi K8s. La migrazione da 17 a 21 è solitamente non-breaking.
+!!! tip "Scegli Java 25 (o 21) per nuovi progetti"
+    Nel 2026 l'LTS corrente è **Java 25** (settembre 2025); Java 21 resta supportato (Oracle Premier fino al 2028, Extended fino al 2031) ed è la baseline più diffusa nelle immagini e nei framework. Java 17 è ancora supportato ma privo di Virtual Threads e ZGC generazionale. Le migrazioni tra LTS sono solitamente non-breaking per il tuning JVM, ma verifica i flag obsoleti (es. `ZGenerational`) e le dipendenze che usano API rimosse.
 
 ---
 
@@ -299,12 +309,17 @@ spring:
 
 ### async-profiler — Profiling a basso overhead in produzione
 
-async-profiler è un profiler sampling a basso overhead (<3% CPU) che funziona anche in container senza accesso root completo.
+async-profiler è un profiler sampling a basso overhead (tipicamente pochi % di CPU) che usa `perf_events` e l'API `AsyncGetCallTrace`, evitando il safepoint bias dei profiler JVMTI classici.
+
+!!! note "Permessi in container"
+    Il default `-e cpu` usa `perf_events`, spesso bloccato in container non privilegiati (`kernel.perf_event_paranoid`, seccomp). Senza `CAP_SYS_ADMIN`/`CAP_PERFMON` usa il fallback `-e itimer` (funziona senza privilegi, meno preciso sul kernel stack). Per l'attach al processo serve inoltre poter fare ptrace/attach sullo stesso utente: in K8s usa un ephemeral container (`kubectl debug`) con `shareProcessNamespace`, oppure includi il profiler nell'immagine.
 
 ```bash
 # 1. Scaricare async-profiler nel container (o incluso nell'immagine base)
-wget https://github.com/async-profiler/async-profiler/releases/latest/download/async-profiler-linux-x64.tar.gz
-tar -xzf async-profiler-linux-x64.tar.gz
+# Gli asset includono la versione: sostituire <versione> con l'ultima release GitHub
+wget https://github.com/async-profiler/async-profiler/releases/download/v<versione>/async-profiler-<versione>-linux-x64.tar.gz
+tar -xzf async-profiler-<versione>-linux-x64.tar.gz --strip-components=1
+# Senza perf_events: aggiungere -e itimer ai comandi seguenti
 
 # 2. Avviare profiling CPU per 30 secondi sul processo JVM
 ./asprof -d 30 -f /tmp/flamegraph.html $(pgrep java)
@@ -319,14 +334,11 @@ tar -xzf async-profiler-linux-x64.tar.gz
 ```bash
 # Accedere al flamegraph fuori dal container
 kubectl cp <namespace>/<pod>:/tmp/flamegraph.html ./flamegraph.html
-
-# Alternativa: port-forward se l'app espone async-profiler via HTTP
-# (richiede integrazione con py-spy o similar per Spring Boot Actuator)
 ```
 
 ### JFR (Java Flight Recorder) — Diagnostica integrata
 
-JFR è integrato nella JVM da Java 11+ e ha overhead <1%. Ideale per diagnostica in produzione.
+JFR è open source e integrato in OpenJDK da Java 11 (backport in 8u262+) e ha overhead tipicamente <1-2% con il profilo `default`. Ideale per diagnostica in produzione.
 
 ```bash
 # Avviare una JFR recording tramite jcmd (dentro il container)
@@ -343,7 +355,7 @@ kubectl cp <namespace>/<pod>:/tmp/recording.jfr ./recording.jfr
 # Abilitare JFR continuo all'avvio (bassa overhead, sempre attivo)
 JAVA_OPTS="$JAVA_OPTS \
   -XX:StartFlightRecording=disk=true,maxage=1h,maxsize=500m,\
-dumponexit=true,filename=/tmp/jfr/"
+dumponexit=true,filename=/tmp/jfr/recording.jfr"
 ```
 
 ```bash
@@ -353,7 +365,7 @@ jfr summary /tmp/recording.jfr
 ```
 
 !!! tip "JFR in Kubernetes — persistent volume"
-    Monta un PVC o usa un sidecar per raccogliere i file JFR prima che il pod si riavvii. Alternativa: usa `-XX:FlightRecorderOptions=dumponexit=true` e configura un InitContainer per esfiltrare i file verso object storage (S3/GCS) all'uscita.
+    Il filesystem del container è effimero: i file JFR spariscono col restart. Scrivili su un PVC (o `emptyDir` letto da un sidecar) che li carica su object storage (S3/GCS). Con `dumponexit=true` il dump avviene solo su uscita pulita (SIGTERM): su OOMKilled (SIGKILL) non c'è nessun dump, quindi tieni il recording `disk=true` con `maxage` e su volume persistente.
 
 ---
 
@@ -400,28 +412,36 @@ kubectl get pods -w | grep my-service
 
 # Strategia 2: HeapDump automatico per diagnostica post-mortem
 -XX:+HeapDumpOnOutOfMemoryError
--XX:HeapDumpPath=/dumps/heapdump-$(hostname).hprof
-# (Montare /dumps su un PVC per persistenza tra restart)
+-XX:HeapDumpPath=/dumps
+# Se HeapDumpPath è una directory, la JVM crea java_pid<pid>.hprof (la shell non
+# espande $(hostname) dentro JAVA_OPTS). Montare /dumps su un PVC per persistenza.
+# Attenzione: un heap dump pesa quanto l'heap usato; dimensiona il volume di conseguenza.
 
-# Strategia 3: GC overhead circuit breaker
-# La JVM lancia OutOfMemoryError se GC impiega >98% del tempo
-# con <2% di heap liberato — evita loop infiniti di GC
-# Questo è il comportamento di default, NON disabilitarlo con:
-# -XX:-UseGCOverheadLimit  ← NON USARE
+# Strategia 3: GC overhead limit (solo ParallelGC)
+# Con ParallelGC la JVM lancia OutOfMemoryError se il GC impiega >98% del tempo
+# recuperando <2% di heap. G1/ZGC non hanno questo meccanismo: lì un heap saturo
+# si manifesta come Full GC ripetuti e latenze crescenti, quindi monitora i log GC.
+# Non disabilitarlo su ParallelGC con -XX:-UseGCOverheadLimit
+
+# Nota: ExitOnOutOfMemoryError copre solo l'OutOfMemoryError Java (heap/metaspace);
+# non evita l'OOMKill del kernel causato dalla memoria off-heap.
 ```
 
 ```yaml
-# Kubernetes: impostare sempre request = limit per QoS Guaranteed
-# Questo previene che il pod venga schedulato su nodi senza memoria sufficiente
-# e riduce la probabilità di OOM per overcommit del nodo
+# Kubernetes: memory request = memory limit (la JVM non restituisce facilmente memoria
+# al nodo, quindi un request più basso del limit significa overcommit sul nodo e
+# rischio di eviction/OOM). QoS Guaranteed richiede request = limit per
+# TUTTE le risorse (anche CPU), per ogni container del Pod.
 resources:
   requests:
-    memory: "768Mi"  # Uguale a limits per QoS Guaranteed
-    cpu: "250m"
-  limits:
-    memory: "768Mi"  # Stesso valore = QoS Guaranteed
+    memory: "1Gi"
     cpu: "1000m"
+  limits:
+    memory: "1Gi"   # Stesso valore = memoria prevedibile
+    cpu: "1000m"    # cpu uguale = QoS Guaranteed; attenzione: limits.cpu=1000m → JVM vede 1 CPU (SerialGC se non forzi G1)
 ```
+
+Se `limits.cpu` è molto più basso dei core usati a runtime, il CFS throttling allunga startup e pause GC: valuta di omettere il limit CPU (mantenendo il request) e di fissare `-XX:ActiveProcessorCount=<n>` per dimensionare thread GC/JIT.
 
 ---
 
@@ -467,7 +487,7 @@ GraalVM Native — scegliere quando:
 ./mvnw package -Dnative -Dquarkus.native.container-build=true
 
 # Dockerfile multi-stage per native image
-FROM ghcr.io/graalvm/native-image:21 AS builder
+FROM ghcr.io/graalvm/native-image-community:21 AS builder
 WORKDIR /app
 COPY . .
 RUN ./mvnw -Pnative native:compile -DskipTests
@@ -479,7 +499,7 @@ ENTRYPOINT ["/app/my-service"]
 ```
 
 !!! warning "Native Image e reflection"
-    GraalVM Native Image esegue la compilazione AOT: tutto ciò che usa reflection, proxy dinamici, o classpath scanning deve essere dichiarato esplicitamente in file JSON di configurazione (`reflect-config.json`, `proxy-config.json`). Spring Boot 3.x e Quarkus gestiscono la maggior parte automaticamente, ma librerie di terze parti potrebbero richiedere configurazione manuale.
+    GraalVM Native Image esegue la compilazione AOT: tutto ciò che usa reflection, proxy dinamici, o classpath scanning deve essere dichiarato esplicitamente nei *reachability metadata* (file JSON in `META-INF/native-image/`: `reachability-metadata.json` nelle versioni recenti, `reflect-config.json`/`proxy-config.json` nel formato storico), generabili con il tracing agent. Spring Boot 3.x e Quarkus gestiscono la maggior parte automaticamente, ma librerie di terze parti potrebbero richiedere configurazione manuale.
 
 ---
 
@@ -571,24 +591,22 @@ kubectl cp <namespace>/<pod>:/tmp/heap.hprof ./heap.hprof
 **Soluzione:**
 
 ```bash
-# 1. Aggiungere Class Data Sharing (CDS) per accelerare il load delle classi
-# Step 1: generare l'archivio CDS
-java -Xshare:dump -XX:SharedArchiveFile=/app/app-cds.jsa \
-     -XX:SharedClassListFile=/app/classlist.txt -jar /app/app.jar
-
-# Step 2: usarlo all'avvio
-java -Xshare:on -XX:SharedArchiveFile=/app/app-cds.jsa \
+# 1. Application Class Data Sharing (AppCDS): archivio delle classi già parsate/verificate
+# Java 19+: l'archivio viene creato al primo avvio e riusato dai successivi
+java -XX:+AutoCreateSharedArchive -XX:SharedArchiveFile=/tmp/app-cds.jsa \
      $JAVA_OPTS -jar /app/app.jar
+# (nell'immagine: generarlo in fase di build, così il Pod parte già con l'archivio.
+#  Java 25 / Leyden: -XX:AOTCache=app.aot, che include anche profili di linking)
 
-# 2. Spring AOT (Spring Boot 3.x) — pre-compila parte del context
-./mvnw spring-boot:build-image -Pnative  # oppure solo AOT senza native
+# 2. Spring AOT (Spring Boot 3.x) — pre-elabora bean definition a build time
+# Build: ./mvnw spring-boot:process-aot ; run: java -Dspring.aot.enabled=true -jar app.jar
 
-# 3. Aumentare initialDelaySeconds nella readiness probe
-# Non è una soluzione, è un workaround — ma evita restart prematuri
-readinessProbe:
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  failureThreshold: 6
+# 3. Startup probe: separa "avvio lento" da "app non sana" senza gonfiare la liveness
+startupProbe:
+  httpGet: { path: /actuator/health/readiness, port: 8080 }
+  periodSeconds: 5
+  failureThreshold: 24   # fino a 120 s per avviarsi
+# Se limits.cpu è basso (es. 500m) l'avvio è throttled: il JIT e il class loading sono CPU-bound.
 ```
 
 ### Scenario 4 — Latenze spike improvvisi (stop-the-world GC pause)
