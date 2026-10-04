@@ -7,9 +7,10 @@ search_keywords: [kafka streams windowing, tumbling window, hopping window, sess
 parent: messaging/kafka/kafka-streams
 related: [messaging/kafka/kafka-streams/topologie, messaging/kafka/fondamenti/broker-cluster, messaging/kafka/kafka-connect/debezium-cdc]
 official_docs: https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#windowing
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Windowing e Aggregazioni Temporali
@@ -31,6 +32,8 @@ Il windowing in Kafka Streams permette di aggregare eventi in finestre temporali
 | **Ingestion Time** | Timestamp quando il record entra in Kafka | Compromesso tra i due |
 
 Kafka Streams usa di default l'**event time** estratto dai record (campo timestamp del record Kafka).
+
+**Stream Time** — Il massimo timestamp (event time) osservato finora dal task su una partizione. Non è l'orologio di sistema: una finestra si **chiude** quando lo stream time supera `window end + grace`. Conseguenza: se non arrivano nuovi eventi, lo stream time resta fermo e le finestre aperte non si chiudono (rilevante per `suppress`).
 
 **Grace Period** — Tempo aggiuntivo dopo la chiusura di una finestra durante il quale eventi in ritardo vengono ancora accettati e l'aggregato viene aggiornato.
 
@@ -107,19 +110,33 @@ KTable<Windowed<String>, Long> sessionEvents = clickstream
     .count();
 ```
 
-### Sliding Window (Joins)
+### Sliding Window
 
-Usate principalmente per le **join temporali** tra due stream. Una finestra scorrevole comprende tutti gli eventi con timestamp entro un range dall'evento corrente.
+Esistono due usi distinti del termine "sliding":
+
+**1. Aggregazioni (`SlidingWindows`, KIP-450)** — finestre di durata fissa il cui bordo è ancorato ai timestamp degli eventi (non a una griglia come l'hopping): si crea una nuova finestra solo quando il contenuto cambia. Utile per "numero di eventi negli ultimi 5 minuti" con risultati esatti senza il costo di un `advance` molto piccolo.
+
+```java
+KTable<Windowed<String>, Long> last5min = orders
+    .groupByKey()
+    .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(
+        Duration.ofMinutes(5), Duration.ofSeconds(30)))
+    .count();
+```
+
+**2. Join temporali (`JoinWindows`)** — due record si uniscono se i timestamp distano meno di un intervallo. Le chiavi devono essere co-partizionate (stesso numero di partizioni e stesso partitioner).
 
 ```java
 KStream<String, Click> clicks = builder.stream("clicks");
 KStream<String, Purchase> purchases = builder.stream("purchases");
 
-// Join: purchase con click avvenuto nei 5 minuti precedenti
+// Join: purchase con click avvenuto nei 5 minuti precedenti.
+// ofTimeDifference* è simmetrico (±5 min): after(ZERO) esclude i click successivi.
 KStream<String, EnrichedPurchase> enriched = purchases.join(
     clicks,
     (purchase, click) -> new EnrichedPurchase(purchase, click),
     JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMinutes(5))
+               .after(Duration.ZERO)
 );
 ```
 
@@ -173,22 +190,27 @@ KTable<Windowed<String>, Long> finalCounts = orders
     );
 ```
 
-!!! warning "Suppress richiede grace period > 0"
-    `untilWindowCloses` funziona solo con finestre che hanno un grace period definito. Il risultato viene emesso solo dopo `window size + grace period`.
+!!! warning "Latenza di emissione e stream time"
+    `untilWindowCloses` emette solo quando lo stream time supera `window end + grace`. Con grace lungo la latenza cresce di pari passo; se il traffico si ferma (o una partizione è inattiva) l'ultimo risultato **non viene mai emesso** finché non arrivano nuovi eventi. Il buffer è in memoria, con backup su changelog topic.
+
+!!! note "Alternativa: EmitStrategy"
+    Nelle versioni 3.x recenti (KIP-825) `windowedBy(...).emitStrategy(EmitStrategy.onWindowClose())` ottiene lo stesso risultato direttamente nello state store, senza buffer di `suppress` né topic changelog aggiuntivo. `suppress` resta valido e molto diffuso.
 
 ### Configurazione properties
 
 ```properties
-# Dimensione dello state store in memoria prima di scrivere su disco (RocksDB)
-cache.max.bytes.buffering=10485760   # 10MB
+# Record cache per istanza (default 10MB). NON è la dimensione dello state store:
+# deduplica gli aggiornamenti successivi sulla stessa chiave prima di emetterli/scriverli,
+# quindi riduce gli aggiornamenti intermedi di una finestra.
+# Dal 3.4 (KIP-770) il nome è statestore.cache.max.bytes; cache.max.bytes.buffering è deprecato (rimosso in 4.0).
+statestore.cache.max.bytes=10485760
 
-# Frequenza di commit degli offset
-commit.interval.ms=100               # bassa latenza
-# commit.interval.ms=30000           # alta produttività
-
-# Handling dei late events oltre il grace period (ignorati di default)
-# Non configurabile direttamente — vengono scartati
+# Frequenza di commit e flush della cache (default 30000 in at-least-once, 100 con exactly_once_v2).
+# Più basso = più aggiornamenti intermedi emessi e latenza minore.
+commit.interval.ms=30000
 ```
+
+I record oltre grace period (late) vengono **scartati** e non è configurabile: monitorare la metrica `dropped-records-total` / `dropped-records-rate` (gruppo `stream-task-metrics`) per accorgersene.
 
 ## Best Practices
 
@@ -216,19 +238,19 @@ commit.interval.ms=100               # bassa latenza
 
 **Sintomo:** Aggregati di finestre che non includono eventi noti, o count più bassi del previsto per window recenti.
 
-**Causa:** Il grace period è troppo corto, oppure il `TimestampExtractor` usa il processing time invece dell'event time, facendo scartare eventi con timestamp più vecchi.
+**Causa:** Il grace period è troppo corto rispetto al ritardo reale degli eventi (con `ofSizeWithNoGrace` qualsiasi record con timestamp più vecchio dello stream time meno la finestra è scartato), oppure il `TimestampExtractor` non estrae l'event time corretto.
 
-**Soluzione:** Aumentare il grace period e verificare l'estrattore di timestamp.
+**Soluzione:** Confermare lo scarto con la metrica `dropped-records-total`, poi aumentare il grace period e verificare l'estrattore di timestamp.
 
 ```java
 // Verificare il TimestampExtractor configurato
 Properties props = new Properties();
 props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-    WallclockTimestampExtractor.class);  // ← processing time, potenzialmente sbagliato
+    WallclockTimestampExtractor.class);  // ← processing time: finestre non riproducibili in reprocessing
 
-// Usare event time con fallback:
+// Default: timestamp del record Kafka, eccezione se negativo/invalido:
 props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-    FailOnInvalidTimestamp.class);       // ← lancia eccezione su timestamp invalido
+    FailOnInvalidTimestamp.class);
 
 // Oppure custom extractor per campo embedded nel payload:
 public class OrderTimestampExtractor implements TimestampExtractor {
@@ -244,12 +266,12 @@ public class OrderTimestampExtractor implements TimestampExtractor {
 
 **Sintomo:** Heap o disco RocksDB cresce nel tempo, OutOfMemoryError o disco pieno sulla macchina del task.
 
-**Causa:** La `retention` del `Materialized` non è configurata o è inferiore a `window size + grace period`. Le vecchie finestre non vengono mai ripulite.
+**Causa:** La `retention` del window store è troppo alta per la cardinalità delle chiavi (spazio ≈ chiavi × finestre mantenute; con hopping ogni evento finisce in `size/advance` finestre). Una retention inferiore a `window size + grace period` non è invece accettata: Kafka Streams lancia un'eccezione alla costruzione della topologia.
 
-**Soluzione:** Impostare la retention esplicitamente nel `Materialized`.
+**Soluzione:** Impostare la retention esplicitamente nel `Materialized` al minimo necessario (anche per interrogare le finestre passate via Interactive Queries) e valutare la cardinalità delle chiavi.
 
 ```java
-// Retention minima consigliata: window + grace + margine
+// Retention minima valida: window + grace; il margine serve solo per le query sullo store
 Duration windowSize = Duration.ofHours(1);
 Duration gracePeriod = Duration.ofMinutes(10);
 Duration retention = windowSize.plus(gracePeriod).plus(Duration.ofMinutes(10)); // margine
@@ -266,38 +288,32 @@ KTable<Windowed<String>, Double> hourlyRevenue = orders
     );
 
 // Monitoraggio via JMX / metrics:
-// kafka.streams:type=stream-state-metrics,task-id=*,store-name=*
-// record-e2e-latency-avg, rocksdb-estimated-num-keys
+// kafka.streams:type=stream-state-metrics,task-id=*,rocksdb-window-state-id=*
+// estimate-num-keys, total-sst-files-size (richiedono metrics.recording.level=DEBUG)
 ```
 
 ### Scenario 3 — Suppress non emette risultati finali
 
 **Sintomo:** Il topic di output rimane vuoto o riceve aggiornamenti intermedi anziché solo il valore finale della finestra.
 
-**Causa:** `Suppressed.untilWindowCloses` richiede che la finestra abbia un grace period > 0. Senza grace period, Kafka Streams non sa quando la finestra è definitivamente chiusa. Oppure il buffer si riempie e scarica presto.
+**Causa:** (1) Lo stream time non avanza: nessun nuovo evento (anche su altre chiavi della stessa partizione) dopo `window end + grace`, quindi la finestra non risulta chiusa. (2) Il grace period è lungo e il risultato arriva tardi. (3) Con `maxBytes`/`maxRecords` il buffer è pieno: `untilWindowCloses` accetta solo configurazioni *strict* e `emitEarlyWhenFull()` è rifiutato (violerebbe la semantica "solo risultato finale").
 
-**Soluzione:** Assicurarsi che il grace period sia definito e dimensionare il buffer.
+**Soluzione:** Verificare che il traffico faccia avanzare lo stream time, dimensionare il grace, e usare un buffer `unbounded()` oppure limitato con `shutDownWhenFull()` (l'app si ferma invece di emettere risultati parziali).
 
 ```java
-// ERRATO: ofSizeWithNoGrace → suppress non funziona
-KTable<Windowed<String>, Long> wrong = orders
-    .groupByKey()
-    .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5)))
-    .count()
-    .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded()));
-
-// CORRETTO: grace period esplicito
-KTable<Windowed<String>, Long> correct = orders
+KTable<Windowed<String>, Long> finalOnly = orders
     .groupByKey()
     .windowedBy(TimeWindows.ofSizeAndGrace(
         Duration.ofMinutes(5),
-        Duration.ofSeconds(30)      // ← obbligatorio per suppress
+        Duration.ofSeconds(30)
     ))
     .count()
     .suppress(Suppressed.untilWindowCloses(
         Suppressed.BufferConfig.maxBytes(50 * 1024 * 1024L)  // 50MB buffer
-            .emitEarlyWhenFull()    // scarica se buffer pieno invece di crashare
+            .shutDownWhenFull()     // strict: fallisce invece di emettere risultati parziali
     ));
+// Se si accettano risultati anticipati usare invece
+// Suppressed.untilTimeLimit(Duration.ofMinutes(1), BufferConfig.maxBytes(...).emitEarlyWhenFull())
 ```
 
 ### Scenario 4 — Session window genera sessioni non attese o troppo frammentate
