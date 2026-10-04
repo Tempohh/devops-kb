@@ -7,9 +7,10 @@ search_keywords: [openshift SCC, security context constraints, openshift restric
 parent: containers/openshift/_index
 related: [containers/kubernetes/sicurezza, security/autenticazione/oauth2-oidc, containers/openshift/architettura]
 official_docs: https://docs.openshift.com/container-platform/latest/authentication/managing-security-context-constraints.html
-status: complete
+status: needs-review
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Sicurezza e SCC
@@ -28,27 +29,38 @@ SCC vs PSA (Kubernetes)
 
   OpenShift SCC:
   - Granulari (10+ SCC predefiniti, custom illimitati)
-  - Per ServiceAccount (non per namespace)
-  - Il sistema assegna automaticamente la SCC più restrittiva
-    compatibile con il pod
+  - Per utente/gruppo/ServiceAccount (non per namespace)
+  - L'admission controller considera le SCC accessibili a chi crea il pod
+    e al ServiceAccount del pod; le ordina per priority decrescente
+    (a parità, dalla più restrittiva) e usa la PRIMA che valida il pod
 
   SCC priority: più alto il valore → valutato per primo
-  anyuid (10) > restricted-v2 (default) > ...
+  anyuid (10) > SCC con priority <none> (restricted-v2, ...)
 ```
+
+!!! note "SCC e Pod Security Admission"
+    Dalla 4.11 OpenShift abilita anche il Pod Security Admission (PSA) di Kubernetes. Un controller (*pod-security-admission-label-synchronization*) imposta le label PSA dei namespace utente in base alle SCC che i ServiceAccount possono usare, così le due barriere restano coerenti. `restricted-v2` è allineata al profilo PSA `restricted`. Le SCC restano il meccanismo che *muta* il pod (assegna UID, contesto SELinux, fsGroup); il PSA si limita ad ammettere o rifiutare.
 
 **SCC predefiniti di OpenShift:**
 
 | SCC | Priority | Uso |
 |-----|----------|-----|
-| `restricted-v2` | default | Default per tutti i pod non privilegiati |
-| `restricted` | 0 | Legacy, mantenuto per compatibilità |
+| `restricted-v2` | nessuna | Default per tutti i pod non privilegiati (concessa a `system:authenticated`) |
+| `restricted` | nessuna | Legacy (pre-4.11), mantenuta per compatibilità |
 | `anyuid` | 10 | Permette qualsiasi UID (incluso root) |
-| `privileged` | 100 | Accesso completo (system pods) |
-| `hostmount-anyuid` | 0 | Mount di path host |
-| `hostnetwork` | 0 | hostNetwork: true |
-| `hostnetwork-v2` | 0 | hostNetwork con seccomp runtime |
-| `nonroot` | 0 | Forza runAsNonRoot ma permette qualsiasi UID non-root |
-| `nonroot-v2` | 0 | Come nonroot ma con seccomp |
+| `privileged` | nessuna | Accesso completo (system pods); concessa esplicitamente, mai di default |
+| `hostmount-anyuid` | nessuna | Mount di path host |
+| `hostnetwork` | nessuna | hostNetwork: true |
+| `hostnetwork-v2` | nessuna | Come `hostnetwork` ma con drop ALL capabilities e seccomp |
+| `nonroot` | nessuna | Forza runAsNonRoot ma permette qualsiasi UID non-root |
+| `nonroot-v2` | nessuna | Come `nonroot` ma con drop ALL capabilities e seccomp |
+
+<!-- REVIEW: verificare se nelle release 4.2x esiste `restricted-v3` (user namespaces) e va aggiunta alla tabella/al default -->
+
+Esistono anche `hostaccess` e SCC dedicate a componenti di sistema (`node-exporter`, ecc.). Le SCC `-v2` sono quelle da preferire: impongono `drop ALL` delle capabilities e il seccomp `runtime/default`, in linea con il PSA `restricted`.
+
+!!! warning "Non modificare le SCC predefinite"
+    Le SCC di default vengono riconciliate dagli operatori e le modifiche si perdono agli upgrade. Per esigenze particolari crea una SCC custom.
 
 ```bash
 # Lista tutte le SCC nel cluster
@@ -62,7 +74,7 @@ oc describe scc restricted-v2
 # Settings:
 #   Allow Privileged: false
 #   Allow Privilege Escalation: false
-#   Allowed Capabilities: <none>   ← nessuna cap aggiuntiva
+#   Allowed Capabilities: NET_BIND_SERVICE  ← unica cap aggiuntiva richiedibile
 #   Allowed Seccomp Profiles: runtime/default,localhost/*
 #   Default Add Capabilities: <none>
 #   Required Drop Capabilities: ALL
@@ -80,11 +92,12 @@ oc describe scc restricted-v2
 ## Assegnare SCC a ServiceAccount
 
 ```bash
-# Approccio 1: tramite ClusterRoleBinding (raccomandato)
+# Concede l'uso della SCC al ServiceAccount (crea un RoleBinding nel namespace)
 oc adm policy add-scc-to-user anyuid -z my-service-account -n my-namespace
 
-# Equivalente manuale:
-oc create clusterrolebinding my-app-anyuid \
+# Equivalente manuale (RBAC: il verbo `use` sulla SCC passa dal ClusterRole
+# system:openshift:scc:<nome>):
+oc create rolebinding my-app-anyuid -n my-namespace \
     --clusterrole=system:openshift:scc:anyuid \
     --serviceaccount=my-namespace:my-service-account
 
@@ -225,7 +238,7 @@ spec:
 
   tokenConfig:
     accessTokenMaxAgeSeconds: 86400     # 24h
-    accessTokenInactivityTimeout: 3600  # 1h di inattività → scadenza
+    accessTokenInactivityTimeout: 3600s # durata (stringa con unità, minimo 300s): 1h di inattività → scadenza
 
 ```
 
@@ -267,15 +280,17 @@ oc get clusterroles | grep openshift
 # registry-admin        → gestisce l'image registry
 # registry-editor       → pusha/tira immagini
 
-# Assegna cluster-admin temporaneo (con scadenza)
+# Assegna cluster-admin (nessuna scadenza automatica: va rimosso a mano
+# con `oc adm policy remove-cluster-role-from-user`)
 oc adm policy add-cluster-role-to-user cluster-admin alice \
     --rolebinding-name=temp-admin
 
 # Assegna admin a un namespace
 oc adm policy add-role-to-user admin bob -n production
 
-# Assegna role a un gruppo LDAP
-oc adm policy add-role-to-group view "corporate-ldap:developers" -n production
+# Assegna role a un gruppo sincronizzato da LDAP
+# (il nome è quello di groupUIDNameMapping; il prefisso "<idp>:" vale solo per gli utenti)
+oc adm policy add-role-to-group view developers -n production
 
 # Rimuovi tutti i role di un utente da un namespace
 oc adm policy remove-user alice -n production
@@ -323,13 +338,23 @@ oc adm groups sync \
     --sync-config=ldap-sync-config.yaml \
     --confirm
 
-# Schedulato via CronJob:
+# Schedulato via CronJob, in un namespace dedicato (mai in openshift-* gestiti
+# dagli operatori). Il ServiceAccount ha bisogno di permessi sui Group:
+oc new-project ldap-sync
+oc create sa ldap-sync-sa -n ldap-sync
+oc create clusterrole ldap-group-syncer \
+    --verb=create,get,list,patch,update --resource=groups.user.openshift.io
+oc create clusterrolebinding ldap-group-syncer \
+    --clusterrole=ldap-group-syncer --serviceaccount=ldap-sync:ldap-sync-sa
+
+# La sync config referenzia /etc/secrets/ldap-password e il CA: vanno montati
+# (qui sotto: ConfigMap ldap-sync-config con sync.yaml e ca, Secret ldap-sync-secret)
 oc apply -f - <<'EOF'
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: ldap-group-sync
-  namespace: openshift-authentication
+  namespace: ldap-sync
 spec:
   schedule: "*/15 * * * *"
   jobTemplate:
@@ -339,14 +364,19 @@ spec:
           serviceAccountName: ldap-sync-sa
           containers:
             - name: sync
-              image: registry.redhat.io/openshift4/ose-cli:latest
+              image: registry.redhat.io/openshift4/ose-cli:v4.18  # pin alla versione del cluster
               command: [oc, adm, groups, sync, --sync-config=/etc/ldap/sync.yaml, --confirm]
               volumeMounts:
                 - {name: config, mountPath: /etc/ldap}
+                - {name: secrets, mountPath: /etc/secrets, readOnly: true}
+          restartPolicy: Never
           volumes:
             - name: config
               configMap:
                 name: ldap-sync-config
+            - name: secrets
+              secret:
+                secretName: ldap-sync-secret
 EOF
 ```
 
@@ -366,8 +396,8 @@ EOF
 # Verifica quale SCC è necessaria
 oc adm policy scc-subject-review -f pod.yaml
 
-# Verifica a quale SCC ha accesso il ServiceAccount
-oc adm policy scc-review -z my-service-account -n my-namespace
+# Verifica con quale SCC il pod sarebbe ammesso usando il suo ServiceAccount
+oc adm policy scc-review -z my-service-account -n my-namespace -f pod.yaml
 
 # Assegna la SCC necessaria
 oc adm policy add-scc-to-user anyuid -z my-service-account -n my-namespace
@@ -394,9 +424,9 @@ oc logs -n openshift-authentication deployment/oauth-openshift --tail=50
 oc get secret -n openshift-config
 oc describe secret ldap-bind-secret -n openshift-config
 
-# Testa la connettività LDAP dal cluster
+# Testa connettività TLS verso LDAP dal cluster (ubi9 ha openssl, non ldapsearch)
 oc run -it --rm ldap-test --image=registry.access.redhat.com/ubi9/ubi \
-    --restart=Never -- ldapsearch -H ldaps://ldap.company.com:636 -x
+    --restart=Never -- openssl s_client -connect ldap.company.com:636 </dev/null
 
 # Verifica la configurazione OAuth attuale
 oc get oauth cluster -o yaml
@@ -418,14 +448,15 @@ oc adm groups sync \
     --sync-config=ldap-sync-config.yaml
 
 # Verifica i log del CronJob
-oc logs -n openshift-authentication job/ldap-group-sync-<id>
+oc logs -n ldap-sync job/ldap-group-sync-<id>
 
-# Verifica che il ServiceAccount abbia il ClusterRole necessario
-oc adm policy who-can create groups
+# Verifica che il ServiceAccount possa creare/aggiornare i Group
+oc auth can-i update groups.user.openshift.io \
+    --as=system:serviceaccount:ldap-sync:ldap-sync-sa
 
-# Assegna il ClusterRole corretto se mancante
-oc adm policy add-cluster-role-to-user \
-    system:auth-delegator -z ldap-sync-sa -n openshift-authentication
+# Se manca: ClusterRole con verbi create,get,list,patch,update su groups (vedi sopra)
+oc create clusterrolebinding ldap-group-syncer \
+    --clusterrole=ldap-group-syncer --serviceaccount=ldap-sync:ldap-sync-sa
 
 # Lista i gruppi sincronizzati
 oc get groups
@@ -445,9 +476,9 @@ oc get groups
 # Verifica quale SCC usa il pod in esecuzione
 oc get pod my-pod -o yaml | grep 'openshift.io/scc'
 
-# Lista SCC assegnate a un ServiceAccount con priorità
+# Quale SCC ammetterebbe il pod con quel ServiceAccount
 oc adm policy scc-subject-review \
-    -z my-service-account -n my-namespace
+    -z my-service-account -n my-namespace -f pod.yaml
 
 # Verifica la priority della SCC custom
 oc get scc myapp-scc -o jsonpath='{.priority}'
