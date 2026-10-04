@@ -7,9 +7,10 @@ search_keywords: [project manager tecnico, engineering manager, PM sviluppo, EM,
 parent: dev/processi/_index
 related: [dev/processi/enterprise-sdlc, monitoring/sre/incident-management, monitoring/sre/slo-sla-sli, monitoring/sre/capacity-planning]
 official_docs: https://itrevolution.com/product/accelerate/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Project Management Tecnico per Microservizi
@@ -63,7 +64,7 @@ Il framework **Team Topologies** (Skelton & Pais, 2019) fornisce un vocabolario 
 │  Gestisce un sottosistema ad alta complessità specialistica     │
 │  → Richiede expertise che non ha senso distribuire              │
 │  → Interfaccia API pulita verso gli altri team                  │
-│  Esempio: "Team ML/Recommandation Engine", "Team Cryptography"  │
+│  Esempio: "Team ML/Recommendation Engine", "Team Cryptography"  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -78,7 +79,7 @@ interaction_modes:
   collaboration:
     descrizione: |
       Due team lavorano insieme attivamente per un periodo limitato,
-      condividendo ownership e conoscenza. Alta bandwidth, alta friczione.
+      condividendo ownership e conoscenza. Alta bandwidth, alta frizione.
     quando_usare:
       - Discovery di un dominio nuovo
       - Integrazione tra due sistemi non ancora definita
@@ -90,7 +91,7 @@ interaction_modes:
   x_as_a_service:
     descrizione: |
       Un team consuma un servizio/piattaforma dell'altro con minimal interaction.
-      Bassa bandwidth, bassa friczione, alta scalabilità.
+      Bassa bandwidth, bassa frizione, alta scalabilità.
     quando_usare:
       - Piattaforme mature con API stabili
       - Tooling DevOps/CI/CD fornito dal Platform Team
@@ -118,7 +119,7 @@ Il confine di un team dovrebbe essere tracciato in modo che il suo **carico cogn
 |------|-------------|-----------|
 | **Intrinseco** | Complessità del dominio applicativo | Minimizzare tramite buoni astrazioni |
 | **Estraneo** | Overhead non legato al dominio (infra, proc) | Delegare al Platform Team |
-| **Germanivo** | Sforzo per acquisire nuova expertise | Lasciare spazio per questo |
+| **Germane** | Sforzo per apprendere e acquisire nuova expertise (carico "buono") | Lasciare spazio per questo |
 
 !!! tip "Come misurare il carico cognitivo in pratica"
     Chiedi al team: "Quante cose devi tenere in testa contemporaneamente per fare una deploy?" Se la risposta è una lista > 10 item, il confine del team è troppo ampio o la piattaforma interna non sta facendo abbastanza.
@@ -127,27 +128,30 @@ Il confine di un team dovrebbe essere tracciato in modo che il suo **carico cogn
 
 ## DORA Metrics e Flow Metrics
 
-### DORA Metrics — I Quattro Indicatori di Elite Performance
+### DORA Metrics — Le Metriche di Software Delivery Performance
 
-Il programma **DORA** (DevOps Research and Assessment) ha identificato quattro metriche che separano i team ad alte performance dagli altri, basate su studi empirici su migliaia di organizzazioni.
+Il programma **DORA** (DevOps Research and Assessment) ha identificato un piccolo set di metriche che separano i team ad alte performance dagli altri, basate su studi empirici su migliaia di organizzazioni. Il set originale (*Accelerate*, 2018) ha quattro metriche: due di **throughput** (velocità) e due di **stability** (stabilità). Misurarle insieme impedisce di barattare velocità con qualità.
 
 ```
 ┌──────────────────────┬────────────────────────────────────────────────┐
-│ METRICA              │ DEFINIZIONE                                     │
+│ METRICA              │ DEFINIZIONE (soglie storiche, report 2021-22)   │
 ├──────────────────────┼────────────────────────────────────────────────┤
 │ Lead Time for Changes│ Tempo dal commit al deployment in produzione    │
-│                      │ Elite: < 1 ora | Low: > 1 mese                 │
+│ (throughput)         │ Elite: < 1 ora | Low: > 1 mese                 │
 ├──────────────────────┼────────────────────────────────────────────────┤
 │ Deployment Frequency │ Quante volte si fa deploy in produzione         │
-│                      │ Elite: multipli/giorno | Low: < 1/mese         │
+│ (throughput)         │ Elite: multipli/giorno | Low: < 1/mese         │
 ├──────────────────────┼────────────────────────────────────────────────┤
 │ Change Failure Rate  │ % deploy che causano incident/rollback          │
-│                      │ Elite: 0-15% | Low: 46-60%                     │
+│ (stability)          │ Elite: 0-15% | Low: 46-60%                     │
 ├──────────────────────┼────────────────────────────────────────────────┤
-│ Mean Time to Restore │ Tempo medio per ripristinare il servizio        │
-│                      │ Elite: < 1 ora | Low: > 1 settimana            │
+│ Time to Restore      │ Tempo per ripristinare il servizio dopo un      │
+│ (stability)          │ guasto. Elite: < 1 ora | Low: > 1 settimana    │
 └──────────────────────┴────────────────────────────────────────────────┘
 ```
+
+!!! note "Evoluzione del modello DORA (2023-2024)"
+    Dal 2023 la quarta metrica è ridefinita **Failed Deployment Recovery Time** (FDRT): misura il recupero dopo un deploy fallito, non dopo qualunque incident (es. guasto infrastrutturale esterno), ed è quindi più legata al processo di delivery. Il report 2024 ha aggiunto una quinta metrica di stability, il **Deployment Rework Rate** (quota di deploy non pianificati, fatti per correggere un incident). Le soglie numeriche e i cluster Elite/High/Medium/Low cambiano da report a report: usa quelle in tabella come ordine di grandezza e prendi i valori correnti da [dora.dev](https://dora.dev/research/).
 
 !!! note "DORA misura il sistema, non i team"
     Le DORA metrics sono indicatori della capacità dell'intero sistema di delivery — pipeline CI/CD, architettura, processo, cultura. Un basso deployment frequency può dipendere da una pipeline lenta, da deployment manuali, da test instabili, o da processi di approvazione. Non usarle per confrontare team individuali in modo isolato.
@@ -277,7 +281,7 @@ tech_debt_register:
   items:
     - id: "TD-042"
       titolo: "Rimozione accoppiamento diretto order-service → inventory-service"
-      categoria: "deliberate-prudent"  # quadrante Fowler
+      categoria: "deliberate-prudent"  # quadrante Fowler: deliberate|inadvertent x prudent|reckless
       data_creazione: "2025-11-15"
       stimato_giorni: 3
       impatto_se_non_risolto: |
@@ -289,19 +293,19 @@ tech_debt_register:
       sprint_target: "Sprint 24"
 
     - id: "TD-039"
-      titolo: "Upgrade Spring Boot 3.2 → 3.4"
-      categoria: "accidental-prudent"
+      titolo: "Upgrade Spring Boot 3.3 → ultima minor 3.5.x"
+      categoria: "inadvertent-prudent"
       data_creazione: "2025-10-01"
       stimato_giorni: 1
       impatto_se_non_risolto: |
-        Spring Boot 3.2 EOL a Novembre 2026. Dipendenze di sicurezza non più patchate.
+        Spring Boot 3.3 è fuori dal supporto OSS (fine supporto: metà 2025). Dipendenze di sicurezza non più patchate.
         CVE potenziali non risolti nelle transitive dependencies.
       priorita: "media"
       sprint_target: "Sprint 26"
 
     - id: "TD-031"
       titolo: "Refactoring PaymentService: God Class da 2000 LOC"
-      categoria: "accidental-imprudent"
+      categoria: "inadvertent-reckless"
       data_creazione: "2025-07-20"
       stimato_giorni: 8
       impatto_se_non_risolto: |
@@ -382,8 +386,8 @@ api_contract:
       2: "Review con tutti i consumer team (meeting dedicato)"
       3: "Periodo di dual-versioning: v1 + v2 coesistono"
       4: "Migration guide scritta e validata con almeno un consumer team"
-      5: "Deprecation notice nel changelog e negli header HTTP (Deprecation: date)"
-      6: "Sunset della versione precedente con avviso 1 mese prima"
+      5: "Deprecation notice nel changelog e negli header HTTP (Deprecation, RFC 9745)"
+      6: "Sunset della versione precedente annunciata con header Sunset (RFC 8594) e avviso 1 mese prima"
 
   versioning:
     schema: "semantic versioning (semver)"
@@ -565,7 +569,7 @@ ENGINEERING_METRICS = {
     La prima domanda non è "quale strumento CI/CD usiamo?" ma "come sono organizzati i team intorno al flusso di valore?". L'architettura del software tende a rispecchiare la struttura di comunicazione dell'organizzazione (Legge di Conway). Progettare prima i team, poi i servizi.
 
 !!! tip "Le DORA metrics migliorano insieme"
-    Non cercare di ottimizzare una sola DORA metric isolatamente. I team elite hanno tutte e quattro le metriche alte. Se il deployment frequency sale ma il change failure rate sale anche lui, stai deploying garbage più spesso. Monitora tutte e quattro.
+    Non cercare di ottimizzare una sola DORA metric isolatamente. I team elite hanno tutte le metriche in zona alta. Se il deployment frequency sale ma il change failure rate sale anche lui, stai deploying garbage più spesso. Monitora throughput e stability insieme.
 
 !!! tip "Il Tech Debt Register è un artefatto di business"
     Presenta il tech debt register al PM/PO in termini di impatto sul delivery, non di qualità del codice. "Questo item ci costa 2 sprint extra di rallentamento ogni trimestre" è più convincente di "il codice è disordinato".
