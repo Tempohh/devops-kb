@@ -7,9 +7,10 @@ search_keywords: [helm templates, helm _helpers.tpl, helm named templates, helm 
 parent: containers/helm/_index
 related: [containers/helm/_index, containers/helm/deployment-produzione, containers/kubernetes/workloads]
 official_docs: https://helm.sh/docs/chart_template_guide/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Chart Avanzato
@@ -24,7 +25,7 @@ description: "MyApp — API Service"
 type: application                   # oppure 'library' (no installazione diretta)
 version: 1.2.0                      # versione del chart (semver)
 appVersion: "3.5.1"                 # versione dell'app impacchettata (informativo)
-kubeVersion: ">=1.24.0"             # constraint versione Kubernetes
+kubeVersion: ">=1.24.0-0"           # constraint versione Kubernetes (il "-0" accetta anche 1.28.3-eks-xxx)
 home: https://github.com/company/myapp
 sources:
   - https://github.com/company/myapp
@@ -56,8 +57,20 @@ dependencies:
     repository: "file://../common"      # chart locale
 ```
 
+!!! warning "kubeVersion e cluster managed"
+    Helm usa semver: una versione con suffisso (`v1.28.3-eks-abc123`, `-gke.1234`) è una **pre-release**
+    e `>=1.24.0` **non** la soddisfa, quindi l'install fallisce su EKS/GKE. Il suffisso `-0` nel constraint
+    (`>=1.24.0-0`) include le pre-release.
+
+!!! note "Versioni e repository Bitnami"
+    Le versioni (`13.x.x`, `17.x.x`) e il repository Bitnami sono esempi illustrativi: i major dei chart
+    Bitnami sono molto avanti. Bitnami ha inoltre ridotto il catalogo gratuito di immagini/chart (2025) e
+    distribuisce i chart anche via OCI (`oci://registry-1.docker.io/bitnamicharts`). Per produzione fissare
+    una versione esatta e valutare mirror interno o alternative (operator, chart mantenuti dal vendor).
+    <!-- REVIEW: verificare stato attuale catalogo Bitnami (charts.bitnami.com, immagini bitnamilegacy) e major correnti di postgresql/redis -->
+
 ```bash
-# Scaricare le dipendenze in charts/
+# Scaricare le dipendenze in charts/ (scrive anche Chart.lock: committarlo per build riproducibili)
 helm dependency update ./myapp
 
 # Verificare dipendenze aggiornate
@@ -179,6 +192,13 @@ affinity: {}
 
 ## _helpers.tpl — Named Templates
 
+!!! note "include vs template, nindent, scope"
+    - `include "nome" .` restituisce una **stringa** pipabile (`| nindent 4`, `| sha256sum`); l'azione `template` stampa direttamente e non è pipabile. Per questo si usa sempre `include`.
+    - `nindent N` aggiunge un a-capo e indenta di N spazi: YAML è sensibile all'indentazione e il testo multi-riga di `toYaml` va riallineato. `{{-` rimuove spazi/a-capo a sinistra per evitare righe vuote.
+    - Dentro `range`/`with` il punto `.` cambia contesto: `$` punta sempre alla radice (`$.Values`, `$.Release`). Un named template riceve solo il contesto passato (`.` o `$`).
+    - Helm 4 (rilasciato nel 2025) mantiene `apiVersion: v2` e la sintassi dei template; cambiano soprattutto apply (server-side apply di default), plugin e alcuni flag (es. `--force` → `--force-replace`).
+      <!-- REVIEW: verificare dettagli Helm 4 (SSA di default, --force-replace, plugin WASM) su helm.sh/docs -->
+
 Il file `templates/_helpers.tpl` contiene template riutilizzabili (prefix `_`, non generano output diretto).
 
 ```yaml
@@ -242,7 +262,7 @@ ServiceAccount name.
 {{- end }}
 
 {{/*
-Image reference completo con digest o tag.
+Image reference completo: tag esplicito, altrimenti appVersion.
 */}}
 {{- define "myapp.image" -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion }}
@@ -273,8 +293,6 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "myapp.labels" . | nindent 4 }}
-  annotations:
-    {{- toYaml .Values.podAnnotations | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -292,6 +310,9 @@ spec:
       annotations:
         # Forza restart su cambio ConfigMap
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
@@ -363,7 +384,7 @@ spec:
 ```
 
 ```yaml
-{{/* templates/ingress.yaml — condizionale con tpl per annotation */}}
+{{/* templates/ingress.yaml — risorsa condizionale con range annidati */}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -469,7 +490,7 @@ spec:
 {{/* Dizionari */}}
 {{ $d := dict "key" "value" "key2" "val2" }}
 {{ $d | toYaml }}
-{{ merge $d .Values.extraConfig }}         # merge di due dicts
+{{ merge $d .Values.extraConfig }}         # merge: $d ha la precedenza e viene MUTATO (usa deepCopy se serve l'originale)
 {{ get $d "key" }}                         # value
 {{ hasKey $d "key" }}                      # true
 
@@ -478,10 +499,12 @@ spec:
 {{ $list | len }}                          # 3
 {{ append $list 4 }}                       # [1 2 3 4]
 {{ without $list 2 }}                      # [1 3]
-{{ has $list 2 }}                          # true
+{{ has 2 $list }}                          # true (ordine: elemento, lista)
 
 {{/* File e lookup */}}
-{{/* lookup(apiVersion, kind, namespace, name) — query cluster live */}}
+{{/* lookup(apiVersion, kind, namespace, name) — query cluster live.
+     Con `helm template` e `--dry-run` (client) ritorna una mappa vuota: non testabile offline;
+     non funziona con strumenti che renderizzano senza cluster (ArgoCD, `helm template` in CI) */}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace "my-secret" }}
 {{- if $existing }}
   {{/* secret esiste già: non sovrascrivere */}}
@@ -494,7 +517,7 @@ spec:
 
 {{ .Values.config.feature | default "disabled" }}   # valore default
 {{ required "image.repository è obbligatorio" .Values.image.repository }}
-{{ .Values.something | tpl . }}                     # render Values come template
+{{ tpl .Values.something . }}                       # render di una stringa dei values come template (args: stringa, contesto)
 
 {{/* range con indice */}}
 {{- range $index, $item := .Values.items }}
@@ -702,7 +725,7 @@ image: "{{ .Values.global.imageRegistry }}/{{ .Values.image.repository }}"
 
 **Causa:** Il valore in `values.yaml` è una stringa `"false"` invece del booleano `false`, oppure è assente e il default non è applicato correttamente.
 
-**Soluzione:** Verificare il tipo del valore con `helm template` in modalità debug. I valori passati via `--set` sono sempre stringhe — usare `--set-string` solo per valori stringa espliciti; per booleani usare `--set key=true` (senza virgolette).
+**Soluzione:** In Go template una stringa non vuota (anche `"false"`) è truthy. Verificare il tipo effettivo con `helm template --debug`. `--set key=true` viene parsato come booleano; `--set-string key=true` forza la stringa (da evitare per flag booleani). Nei file values non quotare i booleani (`enabled: false`, non `"false"`).
 
 ```bash
 # Debug del rendering: mostra tutti i manifesti generati
@@ -748,16 +771,14 @@ kubectl describe pod -n <namespace> -l job-name=<release>-pre-upgrade-migration
 
 **Causa:** Il template ha modificato i `selectorLabels` (campo immutabile nei Deployment) oppure ha cambiato il nome di una risorsa, creando una nuova risorsa invece di aggiornare quella esistente.
 
-**Soluzione:** Per i selettori immutabili, eseguire `helm upgrade` con `--force` (ricrea i Pod) oppure eliminare manualmente la risorsa prima dell'upgrade.
+**Soluzione:** Il Deployment va eliminato e ricreato. `--force` (in Helm 3 sostituisce la risorsa con PUT) **non** aggira l'immutabilità di `spec.selector`: l'API server rifiuta comunque la modifica. `--force` serve per altri conflitti di patch. Per le risorse con un campo immutabile da cambiare: eliminare la risorsa (downtime breve) e rieseguire l'upgrade; per evitarlo, non modificare mai `selectorLabels`.
 
 ```bash
 # Vedere il diff tra la release corrente e il nuovo chart
 helm diff upgrade my-app ./myapp -n production   # richiede plugin helm-diff
 
-# Forzare la ricreazione della risorsa (causa downtime breve)
-helm upgrade my-app ./myapp -n production --force
-
-# In alternativa: eliminare la risorsa immutabile manualmente
+# Eliminare la risorsa con campo immutabile (causa downtime breve)
+# --cascade=orphan lascia i Pod in vita finché il nuovo Deployment non li adotta (solo se i label coincidono)
 kubectl delete deployment my-app -n production
 helm upgrade my-app ./myapp -n production
 
