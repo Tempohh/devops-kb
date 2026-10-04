@@ -7,9 +7,10 @@ search_keywords: [kubernetes multi cluster, gestione multi cluster k8s, cluster 
 parent: containers/kubernetes/_index
 related: [containers/kubernetes/architettura, containers/kubernetes/networking, containers/kubernetes/operators-crd, containers/kubernetes/sicurezza, containers/helm/_index]
 official_docs: https://kubernetes.io/docs/concepts/cluster-administration/
-status: complete
+status: needs-review
 difficulty: expert
 last_updated: 2026-10-03
+last_verified: 2026-10-04
 ---
 
 # Multi-Cluster Kubernetes
@@ -26,7 +27,7 @@ Una strategia **multi-cluster** distribuisce i workload Kubernetes su più clust
 - Limiti di scalabilità di un singolo cluster (>5000 nodi, >150K pod)
 
 **Quando NON adottare:**
-- Meno di 3 cluster → overhead non giustificato, namespaces sufficienti
+- Un solo ambiente senza requisiti di isolamento o geo-distribuzione → overhead non giustificato, namespace sufficienti (prod separato da non-prod resta comunque raccomandato, vedi Best Practices)
 - Team piccolo senza skill di piattaforma → la complessità operativa è alta
 - Workload fortemente interdipendenti che richiedono latenza sub-millisecondo → mantenerli sullo stesso cluster
 
@@ -158,15 +159,21 @@ spec:
       version: v1.29.0
       bootstrap:
         configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
           kind: KubeadmConfigTemplate
           name: prod-eu-west-1-worker-bootstrap
       infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: AWSMachineTemplate
         name: prod-eu-west-1-worker-machine
 ```
 
 !!! warning "CAPI in produzione"
-    CAPI gestisce risorse cloud reali: un errore in un MachineDeployment può terminare nodi in produzione. Usa sempre `--dry-run` per verificare i manifest, e proteggili con policy OPA/Kyverno prima di applicarli.
+    CAPI gestisce risorse cloud reali: un errore in un MachineDeployment può terminare nodi in produzione. Verifica i manifest con `kubectl apply --dry-run=server` (validazione lato API server, a differenza di `client`) e proteggili con policy OPA/Kyverno prima di applicarli.
+
+    <!-- REVIEW: verificare versioni API CAPI — da CAPI v1.11 esiste v1beta2 per i tipi core (v1beta1 deprecata); aggiornare apiVersion e `--kubernetes-version` (v1.29 è fuori supporto) -->
+    <!-- REVIEW: manifest CAPI sono estratti parziali: mancano KubeadmControlPlane, AWSMachineTemplate, KubeadmConfigTemplate -->
+    I numeri di versione (`v1.29.0`) sono esempi: usa una versione Kubernetes ancora supportata e compatibile con il provider.
 
 ---
 
@@ -319,6 +326,10 @@ fleet get bundledeployment -A | grep my-app
 
 **Crossplane** trasforma il management cluster in un piano di controllo universale: provisiona risorse cloud (RDS, S3, GKE, AKS) come se fossero oggetti Kubernetes nativi.
 
+!!! warning "Crossplane v2"
+    Gli esempi sotto usano il modello v1 (Claim + `Composition` con `resources`/`patches` nativi, richiede anche una `CompositeResourceDefinition` non mostrata). Crossplane v2 ha rimosso patch-and-transform nativo (si usa `mode: Pipeline` con composition function, es. `function-patch-and-transform`) e i Claim a favore di XR namespaced.
+    <!-- REVIEW: verificare e riscrivere esempi Crossplane per v2 (Pipeline mode, XR namespaced, XRD) -->
+
 ### Architettura Crossplane
 
 ```
@@ -446,7 +457,7 @@ Multi-Cluster Network Options
 
   4. Submariner
      cluster-A ←→ Broker ←→ cluster-B
-     ✓ open source  ✓ multi-provider  ✗ single point of failure broker
+     ✓ open source  ✓ multi-provider  ✗ broker = SPOF solo per scambio metadati (il data plane è diretto gateway↔gateway)
 ```
 
 ### Cilium Cluster Mesh
@@ -499,6 +510,15 @@ istioctl install --set profile=remote \
 # Verifica connettività
 istioctl remote-clusters --context primary-cluster
 ```
+
+!!! note "Esempio semplificato"
+    Il setup reale richiede anche `meshID`, `clusterName`, `network` coerenti per ogni cluster, un East-West Gateway e i secret di accesso reciproco (`istioctl create-remote-secret`). Vedi la guida *Install Multicluster* di Istio. Per meno overhead (sidecar-less) esiste il multicluster di Istio Ambient.
+    <!-- REVIEW: verificare maturità Istio Ambient multicluster e completare i passi del setup primary-remote -->
+
+!!! info "Lacune note"
+    Non coperti: **Karmada**, **vcluster** (virtual cluster per multi-tenancy), **Multi-Cluster Services API** (`ServiceExport`/`ServiceImport`, KEP-1645) — citati nelle keyword ma senza sezione dedicata.
+    <!-- REVIEW: aggiungere sezioni Karmada / vcluster / MCS API -->
+
 
 ---
 
@@ -593,9 +613,9 @@ kubectl get bundledeployment -A | grep -v Ready
 # Dettaglio dell'errore
 kubectl describe bundledeployment <name> -n fleet-default
 
-# Forza re-sincronizzazione del GitRepo
-kubectl annotate gitrepo my-app -n fleet-default \
-  fleet.cattle.io/force-sync="$(date)"
+# Forza re-sincronizzazione del GitRepo: incrementa forceSyncGeneration
+kubectl patch gitrepo my-app -n fleet-default --type merge \
+  -p '{"spec":{"forceSyncGeneration":2}}'
 ```
 
 ### Scenario 4 — Latenza elevata cross-cluster con Cluster Mesh
@@ -614,9 +634,10 @@ cilium clustermesh status --wait
 kubectl exec -n kube-system ds/cilium -- cilium config | grep mtu
 
 # Abilita direct routing (bypassa overlay quando possibile)
-# In cilium values.yaml:
-# tunnel: disabled
+# In cilium values.yaml (Cilium >= 1.15; `tunnel: disabled` è stato rimosso):
+# routingMode: native
 # autoDirectNodeRoutes: true
+# ipv4NativeRoutingCIDR: <CIDR pod aggregato>
 ```
 
 ### Scenario 5 — Servizi cross-cluster non raggiungibili (CIDR sovrapposti)
