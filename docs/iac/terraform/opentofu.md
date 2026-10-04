@@ -7,7 +7,7 @@ search_keywords: [opentofu, open tofu, tofu, terraform fork, bsl, business sourc
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/state-management, iac/terraform/ci-cd, iac/terraform/moduli]
 official_docs: https://opentofu.org/docs/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -22,8 +22,7 @@ OpenTofu è il fork open-source di Terraform, ospitato dalla **Linux Foundation*
 OpenTofu è un **drop-in replacement** di Terraform fino alla v1.5.x: gli stessi file `.tf`, gli stessi provider, gli stessi state file — nessuna modifica al codice esistente per la migrazione base. Le versioni successive di OpenTofu aggiungono feature non presenti in Terraform (in particolare la **state encryption nativa**) e divergono progressivamente.
 
 !!! note "Versioni di riferimento"
-    Gli esempi usano OpenTofu **v1.8.x** come baseline. Le release successive (1.9, 1.10 con supporto LTS, ecc.) sono retrocompatibili con questi esempi; verificare sempre le release notes e usare l'ultima versione stabile per nuovi progetti.
-    <!-- REVIEW: verificare ultima versione stabile/LTS di OpenTofu e aggiornare i numeri di versione negli esempi (installazione, CI, pinning) -->
+    Gli esempi usano OpenTofu **v1.8.x** come baseline (numeri di versione illustrativi per installazione, CI e pinning). Le release successive sono retrocompatibili con questi esempi; a ottobre 2026 l'ultima stabile è la **1.13.x** (1.13.1, 1 ottobre 2026). Verificare sempre le release notes e usare l'ultima versione stabile per nuovi progetti, adattando i pin degli esempi.
 
 !!! note "Estensione `.tofu`"
     Da OpenTofu 1.8 i file possono avere estensione `.tofu` invece di `.tf`: se esistono entrambi con lo stesso nome, OpenTofu carica solo `.tofu`. Utile per mantenere codice che sfrutta feature esclusive senza rompere la compatibilità con Terraform sullo stesso repository.
@@ -510,9 +509,8 @@ Tutti i principali tool dell'ecosistema Terraform supportano OpenTofu:
 | **terraform-docs** | ✅ Completo | Nessuna modifica richiesta |
 | **pre-commit hooks** | ✅ Completo | Sostituire `terraform_` con `tofu_` negli hook |
 
-!!! warning "Locking S3: `dynamodb_table` in via di deprecazione"
-    Negli esempi sotto `dynamodb_table` resta per compatibilità con le baseline 1.8. Le versioni recenti di OpenTofu (1.10+) supportano il locking nativo S3 con `use_lockfile = true` (lock file condizionale nel bucket, senza DynamoDB) e considerano `dynamodb_table` deprecato.
-    <!-- REVIEW: verificare versione minima di OpenTofu per use_lockfile e stato deprecazione dynamodb_table; aggiornare gli esempi backend s3 -->
+!!! note "Locking S3: `use_lockfile` vs `dynamodb_table`"
+    Negli esempi sotto `dynamodb_table` resta per compatibilità con le baseline 1.8. Da OpenTofu 1.10 è disponibile il locking nativo S3 con `use_lockfile = true` (lock file condizionale nel bucket, senza DynamoDB). Secondo la documentazione ufficiale del backend S3 entrambi i meccanismi sono pienamente supportati e il team OpenTofu **non ha piani di deprecare** nessuno dei due: `dynamodb_table` non è deprecato in OpenTofu.
 
 ```hcl
 # terragrunt.hcl — configurare OpenTofu come binary
