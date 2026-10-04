@@ -14483,7 +14483,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14508,7 +14508,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -14604,10 +14604,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#automaxprocs-la-soluzione-ufficiale" class="md-nav__link">
+  <a href="#automaxprocs-per-go-125" class="md-nav__link">
     <span class="md-ellipsis">
       
-        automaxprocs — la soluzione ufficiale
+        automaxprocs — per Go &lt; 1.25
       
     </span>
   </a>
@@ -14619,6 +14619,17 @@
     <span class="md-ellipsis">
       
         Impostazione manuale GOMAXPROCS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gomemlimit-il-gc-conosce-il-limite-di-memoria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GOMEMLIMIT — il GC conosce il limite di memoria
       
     </span>
   </a>
@@ -24774,10 +24785,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#automaxprocs-la-soluzione-ufficiale" class="md-nav__link">
+  <a href="#automaxprocs-per-go-125" class="md-nav__link">
     <span class="md-ellipsis">
       
-        automaxprocs — la soluzione ufficiale
+        automaxprocs — per Go &lt; 1.25
       
     </span>
   </a>
@@ -24789,6 +24800,17 @@
     <span class="md-ellipsis">
       
         Impostazione manuale GOMAXPROCS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gomemlimit-il-gc-conosce-il-limite-di-memoria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GOMEMLIMIT — il GC conosce il limite di memoria
       
     </span>
   </a>
@@ -25250,7 +25272,43 @@
 
 <h1 id="resource-tuning-multi-linguaggio-in-container">Resource Tuning Multi-Linguaggio in Container<a class="headerlink" href="#resource-tuning-multi-linguaggio-in-container" title="Permanent link">&para;</a></h1>
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
-<p>Ogni runtime ha le proprie euristiche per determinare quanti thread creare, quante goroutine schedulare, e quanta memoria pre-allocare. In un ambiente bare-metal queste euristiche leggono correttamente l'hardware disponibile; all'interno di un container Kubernetes con <code>cpu.limits</code> e <code>memory.limits</code>, la maggior parte dei runtime vede il nodo sottostante — non il container — portando a over-provisioning di thread, throttling CPU aggressivo, e OOM kill. Questo documento descrive il tuning specifico per linguaggio di <strong>Go</strong> (GOMAXPROCS, automaxprocs), <strong>.NET</strong> (ThreadPool sizing), <strong>Node.js</strong> (UV_THREADPOOL_SIZE, cluster mode), e <strong>Python</strong> (Gunicorn worker formula), con una sezione trasversale su <strong>CPU throttling CFS</strong>, <strong>memory overcommit</strong>, e <strong>profiling in produzione</strong> con strumenti nativi per ogni runtime.</p>
+<p>Ogni runtime ha le proprie euristiche per determinare quanti thread creare, quante goroutine schedulare, e quanta memoria pre-allocare. In un ambiente bare-metal queste euristiche leggono correttamente l'hardware disponibile; all'interno di un container Kubernetes con <code>cpu.limits</code> e <code>memory.limits</code>, diversi runtime (o loro versioni meno recenti) dimensionano thread e heap sul nodo sottostante — non sul container — portando a over-provisioning di thread, throttling CPU aggressivo, e OOM kill. Le versioni recenti di Go (≥1.25), .NET e Node.js sono parzialmente <em>container-aware</em>: la tabella sotto indica cosa è automatico e cosa resta da configurare. Questo documento descrive il tuning specifico per linguaggio di <strong>Go</strong> (GOMAXPROCS, automaxprocs), <strong>.NET</strong> (ThreadPool sizing), <strong>Node.js</strong> (UV_THREADPOOL_SIZE, cluster mode), e <strong>Python</strong> (Gunicorn worker formula), con una sezione trasversale su <strong>CPU throttling CFS</strong>, <strong>memory overcommit</strong>, e <strong>profiling in produzione</strong> con strumenti nativi per ogni runtime.</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>CPU limit rispettato di default?</th>
+<th>Da configurare comunque</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Go ≥ 1.25</td>
+<td>Sì (GOMAXPROCS da cgroup, aggiornato dinamicamente)</td>
+<td><code>GOMEMLIMIT</code></td>
+</tr>
+<tr>
+<td>Go &lt; 1.25</td>
+<td>No (usa <code>NumCPU()</code> del nodo)</td>
+<td><code>automaxprocs</code>, <code>GOMEMLIMIT</code></td>
+</tr>
+<tr>
+<td>.NET ≥ 3.0</td>
+<td>Sì (<code>ProcessorCount</code> = ceil del limit)</td>
+<td>Thread pool min, GC heap count/limit</td>
+</tr>
+<tr>
+<td>Node.js</td>
+<td>No per cluster/thread pool</td>
+<td><code>--max-old-space-size</code>, <code>UV_THREADPOOL_SIZE</code>, n. worker</td>
+</tr>
+<tr>
+<td>Python (Gunicorn)</td>
+<td>No (<code>cpu_count()</code> = nodo)</td>
+<td>n. worker</td>
+</tr>
+</tbody>
+</table>
 <div class="admonition warning">
 <p class="admonition-title">Leggere i limiti del container, non del nodo</p>
 <p>Il bug più comune: il container vede 32 vCPU del nodo ma ha <code>cpu.limit: 500m</code> (0.5 core). Il runtime spawna 32 worker thread — tutti vengono throttled dal kernel CFS perché il budget CPU disponibile è 0.5 core/s ogni secondo. Il risultato è latenza alta e CPU throttle al 90%+, non insufficienza di risorse.</p>
@@ -25273,12 +25331,13 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># throttle% = nr_throttled / nr_periods × 100</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1"># Se &gt; 25% → il container viene throttled significativamente</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Con cgroup v2 (Linux 5.8+, Kubernetes 1.25+):</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Con cgroup v2 (default sulle distro recenti; GA in Kubernetes 1.25):</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>cat<span class="w"> </span>/sys/fs/cgroup/cpu.stat
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># stessi campi nr_periods / nr_throttled, ma il tempo è in throttled_usec (µs)</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Metriche Prometheus per CPU throttling (se kube-state-metrics attivo)</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Rate di throttle per container negli ultimi 5 minuti:</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rate<span class="o">(</span>container_cpu_cfs_throttled_seconds_total<span class="o">{</span><span class="nv">container</span><span class="o">=</span><span class="s2">"my-service"</span><span class="o">}[</span>5m<span class="o">])</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Metriche Prometheus per CPU throttling (esposte da cAdvisor/kubelet)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Frazione di periodi CFS throttled per container negli ultimi 5 minuti:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rate<span class="o">(</span>container_cpu_cfs_throttled_periods_total<span class="o">{</span><span class="nv">container</span><span class="o">=</span><span class="s2">"my-service"</span><span class="o">}[</span>5m<span class="o">])</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>/<span class="w"> </span>rate<span class="o">(</span>container_cpu_cfs_periods_total<span class="o">{</span><span class="nv">container</span><span class="o">=</span><span class="s2">"my-service"</span><span class="o">}[</span>5m<span class="o">])</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
 </span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># Alert consigliato: throttle &gt; 25% sostenuto per &gt;5m indica un problema reale</span>
@@ -25328,14 +25387,18 @@
 <hr />
 <h2 id="go-gomaxprocs-e-automaxprocs">Go: GOMAXPROCS e automaxprocs<a class="headerlink" href="#go-gomaxprocs-e-automaxprocs" title="Permanent link">&para;</a></h2>
 <h3 id="il-problema">Il problema<a class="headerlink" href="#il-problema" title="Permanent link">&para;</a></h3>
-<p>Go usa <code>GOMAXPROCS</code> per determinare il numero di thread OS che eseguono goroutine in parallelo. Il default (dalla Go 1.5) è <code>runtime.NumCPU()</code> — che legge il numero di vCPU del <strong>nodo</strong>, non del container.</p>
+<p>Go usa <code>GOMAXPROCS</code> per determinare il numero di thread OS che eseguono goroutine in parallelo. Fino a Go 1.24 il default (dalla Go 1.5) è <code>runtime.NumCPU()</code> — che legge il numero di vCPU del <strong>nodo</strong>, non del container.</p>
+<div class="admonition note">
+<p class="admonition-title">Go 1.25+: GOMAXPROCS container-aware</p>
+<p>Da Go 1.25 il runtime legge il CPU bandwidth limit del cgroup (v1 e v2) e imposta <code>GOMAXPROCS = min(NumCPU, limit arrotondato per eccesso)</code>, <strong>aggiornandolo periodicamente</strong> se il limit cambia (es. in-place resize). Il comportamento si attiva solo se la direttiva <code>go</code> in <code>go.mod</code> è ≥ 1.25 ed è disattivato se <code>GOMAXPROCS</code> è impostato via env var o chiamando <code>runtime.GOMAXPROCS</code>. Opt-out: <code>GODEBUG=containermaxprocs=0,updatemaxprocs=0</code>. Con Go ≥ 1.25 <code>automaxprocs</code> non serve più; resta utile per Go &lt; 1.25. Differenza: <code>automaxprocs</code> arrotonda per <strong>difetto</strong> (min 1), il runtime per <strong>eccesso</strong>.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># In un container con cpu.limit: 500m su nodo da 16 core:</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># GOMAXPROCS default = 16</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Budget CPU disponibile = 0.5 core</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># 16 thread goroutine si contendono 0.5 core → throttling massiccio</span>
 </span></code></pre></div>
-<h3 id="automaxprocs-la-soluzione-ufficiale">automaxprocs — la soluzione ufficiale<a class="headerlink" href="#automaxprocs-la-soluzione-ufficiale" title="Permanent link">&para;</a></h3>
-<p>La libreria <code>automaxprocs</code> di Uber legge i cgroup del container e imposta automaticamente <code>GOMAXPROCS</code> al valore appropriato rispetto al <code>cpu.limit</code>:</p>
+<h3 id="automaxprocs-per-go-125">automaxprocs — per Go &lt; 1.25<a class="headerlink" href="#automaxprocs-per-go-125" title="Permanent link">&para;</a></h3>
+<p>La libreria <code>automaxprocs</code> di Uber (non è parte della stdlib) legge i cgroup del container e imposta automaticamente <code>GOMAXPROCS</code> al valore appropriato rispetto al <code>cpu.limit</code>:</p>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1">// main.go — aggiungere all'inizio di main()</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nx">_</span><span class="w"> </span><span class="s">"go.uber.org/automaxprocs"</span><span class="w">  </span><span class="c1">// blank import per side effect</span>
@@ -25393,145 +25456,120 @@
 </span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"256Mi"</span>
 </span></code></pre></div>
 <div class="language-go highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1">// Impostazione programmatica (alternativa all'import automatico)</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="s">"runtime"</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="kd">func</span><span class="w"> </span><span class="nx">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="c1">// Leggi GOMAXPROCS da env var, con fallback calcolato</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"GOMAXPROCS"</span><span class="p">);</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">n</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">v</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">n</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">            </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">GOMAXPROCS</span><span class="p">(</span><span class="nx">n</span><span class="p">)</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="p">}</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="p">(</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="s">"os"</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="s">"runtime"</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="s">"strconv"</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">)</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="kd">func</span><span class="w"> </span><span class="nx">init</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="c1">// Leggi GOMAXPROCS da env var, con fallback calcolato</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">Getenv</span><span class="p">(</span><span class="s">"GOMAXPROCS"</span><span class="p">);</span><span class="w"> </span><span class="nx">v</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">""</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="nx">n</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">strconv</span><span class="p">.</span><span class="nx">Atoi</span><span class="p">(</span><span class="nx">v</span><span class="p">);</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="kc">nil</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">n</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">            </span><span class="nx">runtime</span><span class="p">.</span><span class="nx">GOMAXPROCS</span><span class="p">(</span><span class="nx">n</span><span class="p">)</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="p">}</span>
 </span></code></pre></div>
+<h3 id="gomemlimit-il-gc-conosce-il-limite-di-memoria">GOMEMLIMIT — il GC conosce il limite di memoria<a class="headerlink" href="#gomemlimit-il-gc-conosce-il-limite-di-memoria" title="Permanent link">&para;</a></h3>
+<p>Il GC Go dimensiona l'heap sul solo <code>GOGC</code> (default 100: il GC parte quando l'heap raddoppia), senza sapere del <code>memory.limit</code>: un picco può superare il limite e causare OOM kill. <code>GOMEMLIMIT</code> (Go 1.19+) è un <em>soft limit</em> sul totale di memoria del runtime: il GC diventa più aggressivo avvicinandosi al valore, invece di lasciare crescere l'heap.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">env</span><span class="p">:</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GOMEMLIMIT</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"230MiB"</span><span class="w">   </span><span class="c1"># ~90% di limits.memory: 256Mi — margine per stack, cgo, buffer non-heap</span>
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Soft limit</p>
+<p>Se il live heap supera <code>GOMEMLIMIT</code> il GC gira in continuo (death spiral, limitato al ~50% della CPU) e l'app rallenta senza crashare. Dimensiona il limit sul working set reale, non solo sul valore del container.</p>
+</div>
 <h3 id="profiling-go-in-produzione-pprof">Profiling Go in produzione: pprof<a class="headerlink" href="#profiling-go-in-produzione-pprof" title="Permanent link">&para;</a></h3>
 <p>Il package <code>net/http/pprof</code> espone endpoint HTTP per il profiling live a basso overhead (&lt;5% CPU):</p>
-<div class="language-go highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1">// main.go — abilitare pprof (solo in ambienti controllati)</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="kn">import</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="s">"net/http/pprof"</span>
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="kn">import</span><span class="w"> </span><span class="s">"net/http"</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">    </span><span class="c1">// Esporre su porta separata (NON sulla porta pubblica del servizio)</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:6060"</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">))</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">    </span><span class="p">}()</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">    </span><span class="c1">// ... resto dell'app</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="p">}</span>
+<div class="language-go highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1">// main.go — abilitare pprof (solo in ambienti controllati)</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">import</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="s">"net/http/pprof"</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">import</span><span class="w"> </span><span class="s">"net/http"</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="kd">func</span><span class="w"> </span><span class="nx">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="c1">// Esporre su porta separata (NON sulla porta pubblica del servizio)</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">    </span><span class="k">go</span><span class="w"> </span><span class="kd">func</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">        </span><span class="nx">log</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">ListenAndServe</span><span class="p">(</span><span class="s">"localhost:6060"</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span><span class="p">))</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">    </span><span class="p">}()</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">    </span><span class="c1">// ... resto dell'app</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Raccogliere CPU profile per 30 secondi (via kubectl port-forward)</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/&lt;pod-name&gt;<span class="w"> </span><span class="m">6060</span>:6060<span class="w"> </span><span class="p">&amp;</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># CPU profile → flamegraph</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="c1"># In pprof shell: web (apre flamegraph nel browser)</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Heap profile (oggetti allocati)</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>http://localhost:6060/debug/pprof/heap
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="c1"># Goroutine dump (verifica goroutine leak)</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>curl<span class="w"> </span>http://localhost:6060/debug/pprof/goroutine?debug<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-50
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="c1"># Scaricare e analizzare con pprof tool</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>curl<span class="w"> </span>-o<span class="w"> </span>cpu.prof<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-http<span class="o">=</span>:8080<span class="w"> </span>cpu.prof
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Raccogliere CPU profile per 30 secondi (via kubectl port-forward)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/&lt;pod-name&gt;<span class="w"> </span><span class="m">6060</span>:6060<span class="w"> </span><span class="p">&amp;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># CPU profile → flamegraph</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># In pprof shell: web (call graph SVG nel browser); per il flamegraph usa -http=:8080 (vedi sotto)</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Heap profile (oggetti allocati)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>http://localhost:6060/debug/pprof/heap
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="c1"># Goroutine dump (verifica goroutine leak)</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>curl<span class="w"> </span>http://localhost:6060/debug/pprof/goroutine?debug<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-50
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="c1"># Scaricare e analizzare con pprof tool</span>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>curl<span class="w"> </span>-o<span class="w"> </span>cpu.prof<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-http<span class="o">=</span>:8080<span class="w"> </span>cpu.prof
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Raccolta non-interattiva per CI/produzione</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-pdf<span class="w"> </span>-output<span class="o">=</span>/tmp/cpu.pdf<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="c1"># Copiare fuori dal container</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;ns&gt;/&lt;pod&gt;:/tmp/cpu.pdf<span class="w"> </span>./cpu.pdf
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Raccolta non-interattiva per CI/produzione</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>go<span class="w"> </span>tool<span class="w"> </span>pprof<span class="w"> </span>-pdf<span class="w"> </span>-output<span class="o">=</span>/tmp/cpu.pdf<span class="w"> </span>http://localhost:6060/debug/pprof/profile?seconds<span class="o">=</span><span class="m">30</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Copiare fuori dal container</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;ns&gt;/&lt;pod&gt;:/tmp/cpu.pdf<span class="w"> </span>./cpu.pdf
 </span></code></pre></div>
 <hr />
 <h2 id="net-thread-pool-sizing">.NET: Thread Pool Sizing<a class="headerlink" href="#net-thread-pool-sizing" title="Permanent link">&para;</a></h2>
 <h3 id="il-problema_1">Il problema<a class="headerlink" href="#il-problema_1" title="Permanent link">&para;</a></h3>
-<p>Il .NET Thread Pool usa due euristiche per dimensionarsi: il numero di core (per i worker thread) e la disponibilità di I/O (per gli I/O completion thread). In container Kubernetes vede i core del nodo — e spawna thread proporzionalmente, causando contention elevata con budget CPU limitato.</p>
+<p>Il .NET Thread Pool usa due euristiche per dimensionarsi: il numero di core (per i worker thread) e la disponibilità di I/O (per gli I/O completion thread). Dal .NET Core 3.0 <code>Environment.ProcessorCount</code> rispetta il <code>cpu.limit</code> del container (arrotondato per eccesso, es. <code>500m</code> → 1), quindi pool e GC partono già dimensionati sul limit. Il problema residuo è un altro: il pool parte con <code>MinThreads = ProcessorCount</code> e, davanti a un burst di lavoro bloccante o async mal scritto, aggiunge thread con l'algoritmo <em>hill-climbing</em> (circa 1–2 al secondo) — su limit bassi ne risultano spike di latenza dopo un burst.</p>
 <h3 id="threadpoolsetminthreads-e-setmaxthreads">ThreadPool.SetMinThreads e SetMaxThreads<a class="headerlink" href="#threadpoolsetminthreads-e-setmaxthreads" title="Permanent link">&para;</a></h3>
-<div class="language-csharp highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1">// Program.cs o Startup.cs — configurare il thread pool all'avvio</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">using</span><span class="w"> </span><span class="nn">System.Threading</span><span class="p">;</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1">// Lettura dei cpu.limits dal container (cgroup)</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="kt">int</span><span class="w"> </span><span class="n">cpuLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GetContainerCpuLimit</span><span class="p">();</span><span class="w"> </span><span class="c1">// vedi helper sotto</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1">// Worker threads: suggerita = cpuLimit * 2 (per workload I/O bound)</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1">// Per workload CPU-bound: uguale a cpuLimit</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="kt">int</span><span class="w"> </span><span class="n">workerThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">(</span><span class="n">cpuLimit</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="kt">int</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">(</span><span class="n">cpuLimit</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">SetMinThreads</span><span class="p">(</span><span class="n">workerThreads</span><span class="p">,</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="p">);</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">SetMaxThreads</span><span class="p">(</span><span class="n">workerThreads</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1">// Log del thread pool corrente</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">GetMinThreads</span><span class="p">(</span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">minWorker</span><span class="p">,</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">minCompletion</span><span class="p">);</span>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">GetMaxThreads</span><span class="p">(</span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">maxWorker</span><span class="p">,</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">maxCompletion</span><span class="p">);</span>
-</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="s">$"ThreadPool: min={minWorker}/{minCompletion}, max={maxWorker}/{maxCompletion}"</span><span class="p">);</span>
-</span></code></pre></div>
-<div class="language-csharp highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">// Helper per leggere cpu.limit dai cgroup (cgroup v1 e v2)</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">static</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="nf">GetContainerCpuLimit</span><span class="p">()</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="p">{</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="c1">// cgroup v2 (Linux 5.8+, Kubernetes 1.25+)</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="k">try</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">cgroupV2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">"/sys/fs/cgroup/cpu.max"</span><span class="p">;</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">File</span><span class="p">.</span><span class="n">Exists</span><span class="p">(</span><span class="n">cgroupV2</span><span class="p">))</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">            </span><span class="kt">var</span><span class="w"> </span><span class="n">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">File</span><span class="p">.</span><span class="n">ReadAllText</span><span class="p">(</span><span class="n">cgroupV2</span><span class="p">).</span><span class="n">Trim</span><span class="p">();</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">            </span><span class="c1">// Formato: "quota period" es "50000 100000" oppure "max 100000"</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">            </span><span class="kt">var</span><span class="w"> </span><span class="n">parts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">content</span><span class="p">.</span><span class="n">Split</span><span class="p">(</span><span class="sc">' '</span><span class="p">);</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s">"max"</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="kt">int</span><span class="p">.</span><span class="n">TryParse</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">quota</span><span class="p">)</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">                </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="kt">int</span><span class="p">.</span><span class="n">TryParse</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">period</span><span class="p">))</span>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="w">            </span><span class="p">{</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">((</span><span class="kt">int</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="n">Ceiling</span><span class="p">((</span><span class="kt">double</span><span class="p">)</span><span class="n">quota</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">period</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="w">            </span><span class="p">}</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="w">    </span><span class="k">catch</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fallback */</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a><span class="w">    </span><span class="c1">// cgroup v1</span>
-</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a><span class="w">    </span><span class="k">try</span>
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a><span class="w">    </span><span class="p">{</span>
-</span><span id="__span-13-25"><a id="__codelineno-13-25" name="__codelineno-13-25" href="#__codelineno-13-25"></a><span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">quotaFile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">"/sys/fs/cgroup/cpu/cpu.cfs_quota_us"</span><span class="p">;</span>
-</span><span id="__span-13-26"><a id="__codelineno-13-26" name="__codelineno-13-26" href="#__codelineno-13-26"></a><span class="w">        </span><span class="kt">var</span><span class="w"> </span><span class="n">periodFile</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">"/sys/fs/cgroup/cpu/cpu.cfs_period_us"</span><span class="p">;</span>
-</span><span id="__span-13-27"><a id="__codelineno-13-27" name="__codelineno-13-27" href="#__codelineno-13-27"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">File</span><span class="p">.</span><span class="n">Exists</span><span class="p">(</span><span class="n">quotaFile</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">File</span><span class="p">.</span><span class="n">Exists</span><span class="p">(</span><span class="n">periodFile</span><span class="p">))</span>
-</span><span id="__span-13-28"><a id="__codelineno-13-28" name="__codelineno-13-28" href="#__codelineno-13-28"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-13-29"><a id="__codelineno-13-29" name="__codelineno-13-29" href="#__codelineno-13-29"></a><span class="w">            </span><span class="kt">int</span><span class="w"> </span><span class="n">quota</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">int</span><span class="p">.</span><span class="n">Parse</span><span class="p">(</span><span class="n">File</span><span class="p">.</span><span class="n">ReadAllText</span><span class="p">(</span><span class="n">quotaFile</span><span class="p">).</span><span class="n">Trim</span><span class="p">());</span>
-</span><span id="__span-13-30"><a id="__codelineno-13-30" name="__codelineno-13-30" href="#__codelineno-13-30"></a><span class="w">            </span><span class="kt">int</span><span class="w"> </span><span class="n">period</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">int</span><span class="p">.</span><span class="n">Parse</span><span class="p">(</span><span class="n">File</span><span class="p">.</span><span class="n">ReadAllText</span><span class="p">(</span><span class="n">periodFile</span><span class="p">).</span><span class="n">Trim</span><span class="p">());</span>
-</span><span id="__span-13-31"><a id="__codelineno-13-31" name="__codelineno-13-31" href="#__codelineno-13-31"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">quota</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
-</span><span id="__span-13-32"><a id="__codelineno-13-32" name="__codelineno-13-32" href="#__codelineno-13-32"></a><span class="w">                </span><span class="k">return</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">((</span><span class="kt">int</span><span class="p">)</span><span class="n">Math</span><span class="p">.</span><span class="n">Ceiling</span><span class="p">((</span><span class="kt">double</span><span class="p">)</span><span class="n">quota</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">period</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
-</span><span id="__span-13-33"><a id="__codelineno-13-33" name="__codelineno-13-33" href="#__codelineno-13-33"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-13-34"><a id="__codelineno-13-34" name="__codelineno-13-34" href="#__codelineno-13-34"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-13-35"><a id="__codelineno-13-35" name="__codelineno-13-35" href="#__codelineno-13-35"></a><span class="w">    </span><span class="k">catch</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* fallback */</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-13-36"><a id="__codelineno-13-36" name="__codelineno-13-36" href="#__codelineno-13-36"></a>
-</span><span id="__span-13-37"><a id="__codelineno-13-37" name="__codelineno-13-37" href="#__codelineno-13-37"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">Environment</span><span class="p">.</span><span class="n">ProcessorCount</span><span class="p">;</span><span class="w"> </span><span class="c1">// fallback</span>
-</span><span id="__span-13-38"><a id="__codelineno-13-38" name="__codelineno-13-38" href="#__codelineno-13-38"></a><span class="p">}</span>
+<div class="language-csharp highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1">// Program.cs o Startup.cs — configurare il thread pool all'avvio</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">using</span><span class="w"> </span><span class="nn">System.Threading</span><span class="p">;</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1">// ProcessorCount rispetta già il cpu.limit del container (ceil);</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1">// per forzare un valore: env DOTNET_PROCESSOR_COUNT</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="kt">int</span><span class="w"> </span><span class="n">cpuLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Environment</span><span class="p">.</span><span class="n">ProcessorCount</span><span class="p">;</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1">// Worker threads: suggerita = cpuLimit * 2 (per workload I/O bound)</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="c1">// Per workload CPU-bound: uguale a cpuLimit</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="kt">int</span><span class="w"> </span><span class="n">workerThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">(</span><span class="n">cpuLimit</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="kt">int</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Math</span><span class="p">.</span><span class="n">Max</span><span class="p">(</span><span class="n">cpuLimit</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">);</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">SetMinThreads</span><span class="p">(</span><span class="n">workerThreads</span><span class="p">,</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="p">);</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">SetMaxThreads</span><span class="p">(</span><span class="n">workerThreads</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="n">completionPortThreads</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="c1">// Log del thread pool corrente</span>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">GetMinThreads</span><span class="p">(</span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">minWorker</span><span class="p">,</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">minCompletion</span><span class="p">);</span>
+</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a><span class="n">ThreadPool</span><span class="p">.</span><span class="n">GetMaxThreads</span><span class="p">(</span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">maxWorker</span><span class="p">,</span><span class="w"> </span><span class="k">out</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">maxCompletion</span><span class="p">);</span>
+</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="s">$"ThreadPool: min={minWorker}/{minCompletion}, max={maxWorker}/{maxCompletion}"</span><span class="p">);</span>
 </span></code></pre></div>
 <h3 id="variabili-dambiente-net-container-relevant">Variabili d'ambiente .NET container-relevant<a class="headerlink" href="#variabili-dambiente-net-container-relevant" title="Permanent link">&para;</a></h3>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Kubernetes Deployment — variabili d'ambiente .NET</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">env</span><span class="p">:</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="c1"># Configurazione thread pool via env (alternativa al codice)</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_SYSTEM_THREADING_THREADPOOL_MINTHREADS</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"4"</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_SYSTEM_THREADING_THREADPOOL_MAXTHREADS</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"32"</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="c1"># HTTP/3 (disabilitare se non necessario — risparmia risorse)</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"false"</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># ATTENZIONE: le env var DOTNET_GC* sono interpretate come valori ESADECIMALI</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">env</span><span class="p">:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="c1"># Cap esplicito dei heap GC (Server GC: 1 heap per core). "2" = 2 heap</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_GCHeapCount</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"2"</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="c1"># Hard limit heap come percentuale della memory.limit. 0x4B = 75</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">  </span><span class="c1"># (con memory.limit presente il default del runtime è già 75%)</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_GCHeapHardLimitPercent</span>
+</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"4B"</span>
 </span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>
-</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span><span class="c1"># GC mode: Server GC (multi-threaded, throughput) vs Workstation GC (single)</span>
-</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">  </span><span class="c1"># In container con 1 CPU: usare Workstation GC</span>
-</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_GCConservatoryMode</span>
-</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span><span class="w">  </span><span class="c1"># Conservative GC — riduce memoria a scapito di throughput</span>
-</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a>
-</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span><span class="c1"># Heap size massima (percentuale della memoria container)</span>
-</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_GCHeapHardLimitPercent</span>
-</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"75"</span><span class="w">  </span><span class="c1"># 75% della memory.limit del container</span>
-</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a>
-</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="nt">resources</span><span class="p">:</span>
-</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">  </span><span class="nt">requests</span><span class="p">:</span>
-</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"500m"</span>
-</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"256Mi"</span>
-</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
-</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"2000m"</span>
-</span><span id="__span-14-28"><a id="__codelineno-14-28" name="__codelineno-14-28" href="#__codelineno-14-28"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"512Mi"</span>
+</span><span id="__span-14-13"><a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">  </span><span class="c1"># Riduce il footprint a scapito del throughput (scala 0-9)</span>
+</span><span id="__span-14-14"><a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_GCConserveMemory</span>
+</span><span id="__span-14-15"><a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"5"</span>
+</span><span id="__span-14-16"><a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a>
+</span><span id="__span-14-17"><a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">  </span><span class="c1"># Workstation GC invece di Server GC: meno memoria, adatto a pod con ~1 CPU</span>
+</span><span id="__span-14-18"><a id="__codelineno-14-18" name="__codelineno-14-18" href="#__codelineno-14-18"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DOTNET_gcServer</span>
+</span><span id="__span-14-19"><a id="__codelineno-14-19" name="__codelineno-14-19" href="#__codelineno-14-19"></a><span class="w">    </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"0"</span>
+</span><span id="__span-14-20"><a id="__codelineno-14-20" name="__codelineno-14-20" href="#__codelineno-14-20"></a>
+</span><span id="__span-14-21"><a id="__codelineno-14-21" name="__codelineno-14-21" href="#__codelineno-14-21"></a><span class="nt">resources</span><span class="p">:</span>
+</span><span id="__span-14-22"><a id="__codelineno-14-22" name="__codelineno-14-22" href="#__codelineno-14-22"></a><span class="w">  </span><span class="nt">requests</span><span class="p">:</span>
+</span><span id="__span-14-23"><a id="__codelineno-14-23" name="__codelineno-14-23" href="#__codelineno-14-23"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"500m"</span>
+</span><span id="__span-14-24"><a id="__codelineno-14-24" name="__codelineno-14-24" href="#__codelineno-14-24"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"256Mi"</span>
+</span><span id="__span-14-25"><a id="__codelineno-14-25" name="__codelineno-14-25" href="#__codelineno-14-25"></a><span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
+</span><span id="__span-14-26"><a id="__codelineno-14-26" name="__codelineno-14-26" href="#__codelineno-14-26"></a><span class="w">    </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"2000m"</span>
+</span><span id="__span-14-27"><a id="__codelineno-14-27" name="__codelineno-14-27" href="#__codelineno-14-27"></a><span class="w">    </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"512Mi"</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Verificare la configurazione thread pool a runtime</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># Via dotnet-counters (dentro il container)</span>
@@ -25564,19 +25602,16 @@
 </span><span id="__span-16-17"><a id="__codelineno-16-17" name="__codelineno-16-17" href="#__codelineno-16-17"></a>dotnet-dump<span class="w"> </span>analyze<span class="w"> </span>/tmp/dump.dmp
 </span><span id="__span-16-18"><a id="__codelineno-16-18" name="__codelineno-16-18" href="#__codelineno-16-18"></a><span class="c1"># In shell dump: dumpheap -stat (oggetti per tipo con size)</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Alternativa: esportare metriche thread pool verso Prometheus</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># (con OpenTelemetry .NET SDK)</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1"># Aggiungere al progetto:</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># dotnet add package OpenTelemetry.Exporter.Prometheus.AspNetCore</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># Metriche esposte automaticamente:</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1"># dotnet_threadpool_thread_count</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="c1"># dotnet_threadpool_queue_length</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1"># dotnet_gc_collections_count{generation="gen0|gen1|gen2"}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Alternativa: esportare metriche runtime verso Prometheus</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># (OpenTelemetry .NET SDK + OpenTelemetry.Instrumentation.Runtime)</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>dotnet<span class="w"> </span>add<span class="w"> </span>package<span class="w"> </span>OpenTelemetry.Instrumentation.Runtime
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>dotnet<span class="w"> </span>add<span class="w"> </span>package<span class="w"> </span>OpenTelemetry.Exporter.Prometheus.AspNetCore
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1"># Espone thread pool (thread count, queue length), GC collections e heap size;</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1"># i nomi esatti delle metriche dipendono dalla versione del pacchetto</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Server GC vs Workstation GC in container</p>
-<p>.NET usa Server GC per default quando vede più di 1 core. Server GC crea un heap GC per core — con 32 core visti dal nodo, crea 32 heap che consumano memoria enorme. Imposta <code>DOTNET_GCHeapCount</code> uguale al numero di CPU limit (es. <code>"2"</code> per <code>cpu.limit: 2000m</code>) per evitare over-allocation.</p>
+<p>Server GC crea un heap (e un thread GC dedicato) per core: più throughput, più memoria. Il numero di heap segue il <code>ProcessorCount</code> visto dal runtime, quindi il cpu.limit; con <code>cpu.limit</code> ≤ 1 o memoria stretta Workstation GC è di solito la scelta migliore. Se usi Server GC, <code>DOTNET_GCHeapCount</code> (esadecimale) mette un tetto esplicito.</p>
 </div>
 <hr />
 <h2 id="nodejs-uv_threadpool_size-e-cluster-mode">Node.js: UV_THREADPOOL_SIZE e Cluster Mode<a class="headerlink" href="#nodejs-uv_threadpool_size-e-cluster-mode" title="Permanent link">&para;</a></h2>
@@ -25590,7 +25625,7 @@
 </span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="c1"># Kubernetes env var</span>
 </span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>env:
 </span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">  </span>-<span class="w"> </span>name:<span class="w"> </span>UV_THREADPOOL_SIZE
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span>value:<span class="w"> </span><span class="s2">"8"</span><span class="w">  </span><span class="c1"># Regola: min(cpu.limit * 2, 128) per workload I/O</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span>value:<span class="w"> </span><span class="s2">"8"</span><span class="w">  </span><span class="c1"># Regola: min(cpu.limit * 2, 1024) per workload I/O</span>
 </span></code></pre></div>
 <div class="language-javascript highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1">// Verifica del thread pool size a runtime</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="kd">const</span><span class="w"> </span><span class="nx">os</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">require</span><span class="p">(</span><span class="s1">'os'</span><span class="p">);</span>
@@ -25609,8 +25644,9 @@
 </span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="s2">const promises = Array(10).fill().map(() =&gt; bcrypt.hash('test', 10));</span>
 </span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="s2">Promise.all(promises).then(() =&gt; console.log(Date.now() - start, 'ms'));</span>
 </span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="s2">"</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Con UV_THREADPOOL_SIZE=4 (default): ~2000ms per 10 hash</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Con UV_THREADPOOL_SIZE=8 (2 core limit): ~1200ms per 10 hash</span>
+</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="c1"># Ordine di grandezza atteso (dipende da hardware e cost factor): con 4 thread</span>
+</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># 10 hash richiedono ~3 "ondate"; con 8+ thread (e CPU sufficiente) ~2.</span>
+</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="c1"># Oltre il numero di core disponibili NON c'è guadagno: i thread vengono throttled.</span>
 </span></code></pre></div>
 <h3 id="cluster-mode-in-kubernetes">Cluster Mode in Kubernetes<a class="headerlink" href="#cluster-mode-in-kubernetes" title="Permanent link">&para;</a></h3>
 <div class="language-javascript highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1">// cluster.js — pattern per sfruttare tutti i CPU limit</span>
@@ -25619,7 +25655,7 @@
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>
 </span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">cluster</span><span class="p">.</span><span class="nx">isPrimary</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">    </span><span class="c1">// Numero di worker = cpu.limit (letto da cgroup o env var)</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">cpuLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">parseInt</span><span class="p">(</span><span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">CPU_LIMIT</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">cpus</span><span class="p">().</span><span class="nx">length</span><span class="p">);</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">cpuLimit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">parseInt</span><span class="p">(</span><span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">CPU_LIMIT</span><span class="p">)</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">os</span><span class="p">.</span><span class="nx">availableParallelism</span><span class="p">();</span>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">numWorkers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Math</span><span class="p">.</span><span class="nx">max</span><span class="p">(</span><span class="nx">cpuLimit</span><span class="p">,</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
 </span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>
 </span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="w">    </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="sb">`Primary </span><span class="si">${</span><span class="nx">process</span><span class="p">.</span><span class="nx">pid</span><span class="si">}</span><span class="sb"> — spawning </span><span class="si">${</span><span class="nx">numWorkers</span><span class="si">}</span><span class="sb"> workers`</span><span class="p">);</span>
@@ -25672,7 +25708,7 @@
 <p>Ogni worker è un processo separato con memoria separata. Cache in-process (Map, WeakMap, variabili globali) non è condivisa tra worker. Per state condiviso usare Redis. Questo vale anche per WebSocket — usare sticky sessions o un broker esterno.</p>
 </div>
 <h3 id="node_options-max-old-space-size">NODE_OPTIONS: --max-old-space-size<a class="headerlink" href="#node_options-max-old-space-size" title="Permanent link">&para;</a></h3>
-<p>Il garbage collector V8 (Node.js) non è container-aware: usa il 50% della RAM del sistema di default. Su un nodo da 64 GB, Node.js tenta di allocare 32 GB di heap anche con <code>memory.limit: 512Mi</code>.</p>
+<p>Il default dell'heap V8 dipende dalla memoria rilevata e dalla versione di Node.js; nelle versioni recenti il limite del cgroup viene considerato, ma il valore risultante può comunque essere troppo vicino (o oltre) al <code>memory.limit</code> perché V8 non conta buffer nativi, stack e memoria fuori heap. Impostarlo esplicitamente rende il comportamento prevedibile: il GC lavora di più <em>prima</em> del limite invece di farti raggiungere l'OOM kill.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Calcolo consigliato: ~70-75% di memory.limit in MB</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># Container con memory.limit: 512Mi → --max-old-space-size=384</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># Container con memory.limit: 1Gi  → --max-old-space-size=768</span>
@@ -25698,62 +25734,68 @@
 <h3 id="il-problema_3">Il problema<a class="headerlink" href="#il-problema_3" title="Permanent link">&para;</a></h3>
 <p>Python (con CPython) ha il <strong>GIL (Global Interpreter Lock)</strong> che impedisce l'esecuzione parallela di bytecode Python in un singolo processo. Per sfruttare più CPU, è necessario usare <strong>processi multipli</strong> (multi-process, non multi-thread). Gunicorn gestisce questo con il suo worker model.</p>
 <h3 id="formula-worker-gunicorn">Formula worker Gunicorn<a class="headerlink" href="#formula-worker-gunicorn" title="Permanent link">&para;</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Formula standard Gunicorn:</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># Formula suggerita dalla documentazione Gunicorn (punto di partenza, worker sync):</span>
 </span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># workers = (2 × cpu_count) + 1</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Per container Kubernetes, leggere cpu.limit:</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="nv">CPU_LIMIT</span><span class="o">=</span><span class="k">$(</span>cat<span class="w"> </span>/sys/fs/cgroup/cpu/cpu.cfs_quota_us<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">'{print int($1/100000)}'</span><span class="k">)</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># Fallback se cgroup v2 o non disponibile:</span>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="nv">CPU_LIMIT</span><span class="o">=</span><span class="si">${</span><span class="nv">CPU_LIMIT</span><span class="k">:-$(</span>nproc<span class="k">)</span><span class="si">}</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="nv">WORKERS</span><span class="o">=</span><span class="k">$((</span><span class="m">2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">CPU_LIMIT</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">1</span><span class="k">))</span>
-</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
-</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># Esempio con cpu.limit: 2000m → CPU_LIMIT=2 → WORKERS=5</span>
-</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># Esempio con cpu.limit: 500m  → CPU_LIMIT=0 → (fallback) WORKERS=1</span>
-</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a>
-</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a>gunicorn<span class="w"> </span>--workers<span class="w"> </span><span class="nv">$WORKERS</span><span class="w"> </span>--bind<span class="w"> </span><span class="m">0</span>.0.0.0:8000<span class="w"> </span>myapp:app
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># Perché: mentre un worker sync è bloccato su I/O, gli altri usano la CPU</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># Per container Kubernetes, leggere cpu.limit:</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="k">if</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>-r<span class="w"> </span>/sys/fs/cgroup/cpu.max<span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span><span class="w">            </span><span class="c1"># cgroup v2: "quota period" oppure "max period"</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">  </span><span class="nv">CPU_LIMIT</span><span class="o">=</span><span class="k">$(</span>awk<span class="w"> </span><span class="s1">'$1=="max"{print 0; next} {print int($1/$2)}'</span><span class="w"> </span>/sys/fs/cgroup/cpu.max<span class="k">)</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="k">else</span><span class="w">                                               </span><span class="c1"># cgroup v1: quota = -1 se illimitato</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a><span class="w">  </span><span class="nv">CPU_LIMIT</span><span class="o">=</span><span class="k">$(</span>awk<span class="w"> </span><span class="s1">'{print ($1&gt;0)? int($1/100000) : 0}'</span><span class="w"> </span>/sys/fs/cgroup/cpu/cpu.cfs_quota_us<span class="w"> </span><span class="m">2</span>&gt;/dev/null<span class="k">)</span>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="k">fi</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="c1"># Senza limit (0 o vuoto) o limit &lt; 1 CPU → minimo 1 (nproc vedrebbe i core del nodo)</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="o">[</span><span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">CPU_LIMIT</span><span class="k">:-</span><span class="nv">0</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span>-lt<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="o">]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">CPU_LIMIT</span><span class="o">=</span><span class="m">1</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="nv">WORKERS</span><span class="o">=</span><span class="k">$((</span><span class="m">2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="nv">CPU_LIMIT</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="m">1</span><span class="k">))</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="c1"># Esempio con cpu.limit: 2000m → CPU_LIMIT=2 → WORKERS=5</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="c1"># Esempio con cpu.limit: 500m  → CPU_LIMIT=0 → CPU_LIMIT=1 → WORKERS=3</span>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a>gunicorn<span class="w"> </span>--workers<span class="w"> </span><span class="nv">$WORKERS</span><span class="w"> </span>--bind<span class="w"> </span><span class="m">0</span>.0.0.0:8000<span class="w"> </span>myapp:app
 </span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Configurazione Gunicorn completa per container (gunicorn.conf.py)</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>import<span class="w"> </span>multiprocessing
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>import<span class="w"> </span>os
+<div class="language-python highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Configurazione Gunicorn completa per container (gunicorn.conf.py)</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">multiprocessing</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 </span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
 </span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="c1"># Lettura cpu limit da cgroup</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>def<span class="w"> </span>get_cpu_limit<span class="o">()</span>:
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span>try:
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">        </span><span class="c1"># cgroup v2</span>
-</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">        </span>with<span class="w"> </span>open<span class="o">(</span><span class="s1">'/sys/fs/cgroup/cpu.max'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>f:
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">            </span><span class="nv">content</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>f.read<span class="o">()</span>.strip<span class="o">()</span>
-</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a><span class="w">            </span>quota,<span class="w"> </span><span class="nv">period</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>content.split<span class="o">()</span>
-</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span>quota<span class="w"> </span>!<span class="o">=</span><span class="w"> </span><span class="s1">'max'</span>:
-</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="w">                </span><span class="k">return</span><span class="w"> </span>max<span class="o">(</span>int<span class="o">(</span>int<span class="o">(</span>quota<span class="o">)</span><span class="w"> </span>/<span class="w"> </span>int<span class="o">(</span>period<span class="o">))</span>,<span class="w"> </span><span class="m">1</span><span class="o">)</span>
-</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a><span class="w">    </span>except<span class="w"> </span>Exception:
-</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a><span class="w">        </span>pass
-</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a><span class="w">    </span>try:
-</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a><span class="w">        </span><span class="c1"># cgroup v1</span>
-</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a><span class="w">        </span>with<span class="w"> </span>open<span class="o">(</span><span class="s1">'/sys/fs/cgroup/cpu/cpu.cfs_quota_us'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>f:
-</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a><span class="w">            </span><span class="nv">quota</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>int<span class="o">(</span>f.read<span class="o">()</span>.strip<span class="o">())</span>
-</span><span id="__span-25-20"><a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a><span class="w">        </span>with<span class="w"> </span>open<span class="o">(</span><span class="s1">'/sys/fs/cgroup/cpu/cpu.cfs_period_us'</span><span class="o">)</span><span class="w"> </span>as<span class="w"> </span>f:
-</span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a><span class="w">            </span><span class="nv">period</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>int<span class="o">(</span>f.read<span class="o">()</span>.strip<span class="o">())</span>
-</span><span id="__span-25-22"><a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a><span class="w">        </span><span class="k">if</span><span class="w"> </span>quota<span class="w"> </span>&gt;<span class="w"> </span><span class="m">0</span>:
-</span><span id="__span-25-23"><a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a><span class="w">            </span><span class="k">return</span><span class="w"> </span>max<span class="o">(</span>int<span class="o">(</span>quota<span class="w"> </span>/<span class="w"> </span>period<span class="o">)</span>,<span class="w"> </span><span class="m">1</span><span class="o">)</span>
-</span><span id="__span-25-24"><a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a><span class="w">    </span>except<span class="w"> </span>Exception:
-</span><span id="__span-25-25"><a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a><span class="w">        </span>pass
-</span><span id="__span-25-26"><a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span>multiprocessing.cpu_count<span class="o">()</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_cpu_limit</span><span class="p">():</span>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>        <span class="c1"># cgroup v2</span>
+</span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">'/sys/fs/cgroup/cpu.max'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a>            <span class="n">content</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+</span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>            <span class="n">quota</span><span class="p">,</span> <span class="n">period</span> <span class="o">=</span> <span class="n">content</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+</span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a>            <span class="k">if</span> <span class="n">quota</span> <span class="o">!=</span> <span class="s1">'max'</span><span class="p">:</span>
+</span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a>                <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">quota</span><span class="p">)</span> <span class="o">/</span> <span class="nb">int</span><span class="p">(</span><span class="n">period</span><span class="p">)),</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-25-14"><a id="__codelineno-25-14" name="__codelineno-25-14" href="#__codelineno-25-14"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+</span><span id="__span-25-15"><a id="__codelineno-25-15" name="__codelineno-25-15" href="#__codelineno-25-15"></a>        <span class="k">pass</span>
+</span><span id="__span-25-16"><a id="__codelineno-25-16" name="__codelineno-25-16" href="#__codelineno-25-16"></a>    <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-25-17"><a id="__codelineno-25-17" name="__codelineno-25-17" href="#__codelineno-25-17"></a>        <span class="c1"># cgroup v1</span>
+</span><span id="__span-25-18"><a id="__codelineno-25-18" name="__codelineno-25-18" href="#__codelineno-25-18"></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">'/sys/fs/cgroup/cpu/cpu.cfs_quota_us'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-25-19"><a id="__codelineno-25-19" name="__codelineno-25-19" href="#__codelineno-25-19"></a>            <span class="n">quota</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+</span><span id="__span-25-20"><a id="__codelineno-25-20" name="__codelineno-25-20" href="#__codelineno-25-20"></a>        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">'/sys/fs/cgroup/cpu/cpu.cfs_period_us'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+</span><span id="__span-25-21"><a id="__codelineno-25-21" name="__codelineno-25-21" href="#__codelineno-25-21"></a>            <span class="n">period</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+</span><span id="__span-25-22"><a id="__codelineno-25-22" name="__codelineno-25-22" href="#__codelineno-25-22"></a>        <span class="k">if</span> <span class="n">quota</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+</span><span id="__span-25-23"><a id="__codelineno-25-23" name="__codelineno-25-23" href="#__codelineno-25-23"></a>            <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">quota</span> <span class="o">/</span> <span class="n">period</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-25-24"><a id="__codelineno-25-24" name="__codelineno-25-24" href="#__codelineno-25-24"></a>    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+</span><span id="__span-25-25"><a id="__codelineno-25-25" name="__codelineno-25-25" href="#__codelineno-25-25"></a>        <span class="k">pass</span>
+</span><span id="__span-25-26"><a id="__codelineno-25-26" name="__codelineno-25-26" href="#__codelineno-25-26"></a>    <span class="k">return</span> <span class="n">multiprocessing</span><span class="o">.</span><span class="n">cpu_count</span><span class="p">()</span>
 </span><span id="__span-25-27"><a id="__codelineno-25-27" name="__codelineno-25-27" href="#__codelineno-25-27"></a>
-</span><span id="__span-25-28"><a id="__codelineno-25-28" name="__codelineno-25-28" href="#__codelineno-25-28"></a><span class="nv">cpu_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>get_cpu_limit<span class="o">()</span>
+</span><span id="__span-25-28"><a id="__codelineno-25-28" name="__codelineno-25-28" href="#__codelineno-25-28"></a><span class="n">cpu_count</span> <span class="o">=</span> <span class="n">get_cpu_limit</span><span class="p">()</span>
 </span><span id="__span-25-29"><a id="__codelineno-25-29" name="__codelineno-25-29" href="#__codelineno-25-29"></a>
 </span><span id="__span-25-30"><a id="__codelineno-25-30" name="__codelineno-25-30" href="#__codelineno-25-30"></a><span class="c1"># Gunicorn settings</span>
-</span><span id="__span-25-31"><a id="__codelineno-25-31" name="__codelineno-25-31" href="#__codelineno-25-31"></a><span class="nb">bind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.0.0.0:8000"</span>
-</span><span id="__span-25-32"><a id="__codelineno-25-32" name="__codelineno-25-32" href="#__codelineno-25-32"></a><span class="nv">workers</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>int<span class="o">(</span>os.getenv<span class="o">(</span><span class="s2">"GUNICORN_WORKERS"</span>,<span class="w"> </span><span class="o">(</span><span class="m">2</span><span class="w"> </span>*<span class="w"> </span>cpu_count<span class="o">)</span><span class="w"> </span>+<span class="w"> </span><span class="m">1</span><span class="o">))</span>
-</span><span id="__span-25-33"><a id="__codelineno-25-33" name="__codelineno-25-33" href="#__codelineno-25-33"></a><span class="nv">worker_class</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>os.getenv<span class="o">(</span><span class="s2">"GUNICORN_WORKER_CLASS"</span>,<span class="w"> </span><span class="s2">"sync"</span><span class="o">)</span><span class="w">  </span><span class="c1"># sync, gevent, uvicorn.workers.UvicornWorker</span>
-</span><span id="__span-25-34"><a id="__codelineno-25-34" name="__codelineno-25-34" href="#__codelineno-25-34"></a><span class="nv">worker_connections</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">1000</span><span class="w">   </span><span class="c1"># per worker async (gevent/asyncio)</span>
-</span><span id="__span-25-35"><a id="__codelineno-25-35" name="__codelineno-25-35" href="#__codelineno-25-35"></a><span class="nv">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">120</span>
-</span><span id="__span-25-36"><a id="__codelineno-25-36" name="__codelineno-25-36" href="#__codelineno-25-36"></a><span class="nv">keepalive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="m">5</span>
-</span><span id="__span-25-37"><a id="__codelineno-25-37" name="__codelineno-25-37" href="#__codelineno-25-37"></a><span class="nv">preload_app</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>True<span class="w">          </span><span class="c1"># carica l'app nel master → fork copy-on-write</span>
-</span><span id="__span-25-38"><a id="__codelineno-25-38" name="__codelineno-25-38" href="#__codelineno-25-38"></a>
-</span><span id="__span-25-39"><a id="__codelineno-25-39" name="__codelineno-25-39" href="#__codelineno-25-39"></a><span class="c1"># Logging</span>
-</span><span id="__span-25-40"><a id="__codelineno-25-40" name="__codelineno-25-40" href="#__codelineno-25-40"></a><span class="nv">accesslog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"-"</span><span class="w">             </span><span class="c1"># stdout</span>
-</span><span id="__span-25-41"><a id="__codelineno-25-41" name="__codelineno-25-41" href="#__codelineno-25-41"></a><span class="nv">errorlog</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"-"</span><span class="w">              </span><span class="c1"># stderr</span>
-</span><span id="__span-25-42"><a id="__codelineno-25-42" name="__codelineno-25-42" href="#__codelineno-25-42"></a><span class="nv">loglevel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"info"</span>
+</span><span id="__span-25-31"><a id="__codelineno-25-31" name="__codelineno-25-31" href="#__codelineno-25-31"></a><span class="n">bind</span> <span class="o">=</span> <span class="s2">"0.0.0.0:8000"</span>
+</span><span id="__span-25-32"><a id="__codelineno-25-32" name="__codelineno-25-32" href="#__codelineno-25-32"></a><span class="n">workers</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"GUNICORN_WORKERS"</span><span class="p">,</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">cpu_count</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+</span><span id="__span-25-33"><a id="__codelineno-25-33" name="__codelineno-25-33" href="#__codelineno-25-33"></a><span class="n">worker_class</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">"GUNICORN_WORKER_CLASS"</span><span class="p">,</span> <span class="s2">"sync"</span><span class="p">)</span>  <span class="c1"># sync, gevent, uvicorn_worker.UvicornWorker</span>
+</span><span id="__span-25-34"><a id="__codelineno-25-34" name="__codelineno-25-34" href="#__codelineno-25-34"></a><span class="n">worker_tmp_dir</span> <span class="o">=</span> <span class="s2">"/dev/shm"</span>  <span class="c1"># heartbeat in RAM: evita worker 'bloccati' se /tmp del container è lento (overlayfs)</span>
+</span><span id="__span-25-35"><a id="__codelineno-25-35" name="__codelineno-25-35" href="#__codelineno-25-35"></a><span class="n">worker_connections</span> <span class="o">=</span> <span class="mi">1000</span>   <span class="c1"># per worker async (gevent/asyncio)</span>
+</span><span id="__span-25-36"><a id="__codelineno-25-36" name="__codelineno-25-36" href="#__codelineno-25-36"></a><span class="n">timeout</span> <span class="o">=</span> <span class="mi">120</span>
+</span><span id="__span-25-37"><a id="__codelineno-25-37" name="__codelineno-25-37" href="#__codelineno-25-37"></a><span class="n">keepalive</span> <span class="o">=</span> <span class="mi">5</span>
+</span><span id="__span-25-38"><a id="__codelineno-25-38" name="__codelineno-25-38" href="#__codelineno-25-38"></a><span class="n">preload_app</span> <span class="o">=</span> <span class="kc">True</span>          <span class="c1"># carica l'app nel master → fork copy-on-write</span>
+</span><span id="__span-25-39"><a id="__codelineno-25-39" name="__codelineno-25-39" href="#__codelineno-25-39"></a>
+</span><span id="__span-25-40"><a id="__codelineno-25-40" name="__codelineno-25-40" href="#__codelineno-25-40"></a><span class="c1"># Logging</span>
+</span><span id="__span-25-41"><a id="__codelineno-25-41" name="__codelineno-25-41" href="#__codelineno-25-41"></a><span class="n">accesslog</span> <span class="o">=</span> <span class="s2">"-"</span>             <span class="c1"># stdout</span>
+</span><span id="__span-25-42"><a id="__codelineno-25-42" name="__codelineno-25-42" href="#__codelineno-25-42"></a><span class="n">errorlog</span> <span class="o">=</span> <span class="s2">"-"</span>              <span class="c1"># stderr</span>
+</span><span id="__span-25-43"><a id="__codelineno-25-43" name="__codelineno-25-43" href="#__codelineno-25-43"></a><span class="n">loglevel</span> <span class="o">=</span> <span class="s2">"info"</span>
 </span></code></pre></div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Kubernetes Deployment — Python/Gunicorn</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">apps/v1</span>
@@ -25771,7 +25813,7 @@
 </span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GUNICORN_WORKERS</span>
 </span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"5"</span><span class="w">  </span><span class="c1"># Override manuale (es. 2 CPU → 5 workers)</span>
 </span><span id="__span-26-16"><a id="__codelineno-26-16" name="__codelineno-26-16" href="#__codelineno-26-16"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GUNICORN_WORKER_CLASS</span>
-</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"uvicorn.workers.UvicornWorker"</span><span class="w">  </span><span class="c1"># per FastAPI/ASGI</span>
+</span><span id="__span-26-17"><a id="__codelineno-26-17" name="__codelineno-26-17" href="#__codelineno-26-17"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">"uvicorn_worker.UvicornWorker"</span><span class="w">  </span><span class="c1"># per FastAPI/ASGI (pacchetto uvicorn-worker)</span>
 </span><span id="__span-26-18"><a id="__codelineno-26-18" name="__codelineno-26-18" href="#__codelineno-26-18"></a><span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
 </span><span id="__span-26-19"><a id="__codelineno-26-19" name="__codelineno-26-19" href="#__codelineno-26-19"></a><span class="w">            </span><span class="nt">requests</span><span class="p">:</span>
 </span><span id="__span-26-20"><a id="__codelineno-26-20" name="__codelineno-26-20" href="#__codelineno-26-20"></a><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"500m"</span>
@@ -25801,9 +25843,9 @@
 <td><code>gevent</code></td>
 </tr>
 <tr>
-<td><code>uvicorn.workers.UvicornWorker</code></td>
+<td><code>uvicorn_worker.UvicornWorker</code></td>
 <td>FastAPI, Starlette (ASGI)</td>
-<td><code>uvicorn[standard]</code></td>
+<td><code>uvicorn-worker</code> (il vecchio <code>uvicorn.workers</code> è deprecato)</td>
 </tr>
 <tr>
 <td><code>tornado</code></td>
@@ -25814,7 +25856,7 @@
 </table>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Installare il worker class scelto</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pip<span class="w"> </span>install<span class="w"> </span>gunicorn<span class="w"> </span>gevent<span class="w">            </span><span class="c1"># per worker gevent</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pip<span class="w"> </span>install<span class="w"> </span>gunicorn<span class="w"> </span>uvicorn<span class="o">[</span>standard<span class="o">]</span><span class="w"> </span><span class="c1"># per FastAPI/ASGI</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pip<span class="w"> </span>install<span class="w"> </span>gunicorn<span class="w"> </span>uvicorn-worker<span class="w">   </span><span class="c1"># per FastAPI/ASGI</span>
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">preload_app = True — risparmio memoria</p>
@@ -25856,20 +25898,21 @@
 - Esponi <code>pprof</code> su una porta interna dedicata (es. <code>:6060</code>) e proteggi con NetworkPolicy.
 - Monitora goroutine count via pprof <code>/debug/pprof/goroutine</code> — goroutine leak è la causa più comune di memory leak in Go.</p>
 <p><strong>.NET:</strong>
-- Imposta sempre <code>DOTNET_GCHeapCount</code> = floor(cpu.limit) — previene la creazione di 32 heap GC su nodi con 32 core.
+- Verifica <code>Environment.ProcessorCount</code> a runtime: è la base di pool e GC. Con Server GC, valuta <code>DOTNET_GCHeapCount</code> per un tetto esplicito; ricorda che le env <code>DOTNET_GC*</code> sono esadecimali.
 - Usa <code>ThreadPool.SetMinThreads</code> per evitare il "thread pool hill-climbing" (latenza spike nei primi secondi dopo un burst di traffico).
 - Con ASP.NET Core, preferire async/await ovunque — riduce la pressione sul thread pool.</p>
 <p><strong>Node.js:</strong>
 - Imposta sempre <code>--max-old-space-size</code> proporzionale al <code>memory.limit</code> del container.
 - Usa cluster mode (o PM2) per container con <code>cpu.limit</code> &gt; 1 core.
-- Non aumentare <code>UV_THREADPOOL_SIZE</code> &gt; 128 (limite libuv).</p>
+- Non aumentare <code>UV_THREADPOOL_SIZE</code> &gt; 1024 (limite libuv; era 128 nelle versioni vecchie) — in pratica resta su valori piccoli: ogni thread costa memoria e contesa CPU.
+- In Kubernetes valuta più repliche single-process invece del cluster mode: scaling, isolamento OOM e metriche per-pod sono più semplici.</p>
 <p><strong>Python:</strong>
 - Usa la formula <code>2*CPU+1</code> come punto di partenza, poi aumenta se il profiling mostra worker idle.
-- Con worker gevent o uvicorn, il numero di worker può essere ridotto (es. <code>CPU+1</code>) perché ogni worker gestisce molte connessioni concorrenti.
+- Con worker gevent o uvicorn, il numero di worker può essere ridotto (es. <code>CPU</code>, o 1 per pod con scaling orizzontale) perché ogni worker gestisce molte connessioni concorrenti.
 - Evita import a livello di modulo che allocano strutture dati grandi — con <code>preload_app=True</code> vengono allocate nel master e replicate (copy-on-write) in ogni worker.</p>
 <div class="admonition warning">
 <p class="admonition-title">Vertical pod autoscaling e GOMAXPROCS/workers</p>
-<p>Se usi VPA (Vertical Pod Autoscaler), i <code>cpu.limits</code> possono cambiare dinamicamente. Configurazioni hardcoded di GOMAXPROCS, worker count, o thread pool non si adatteranno. Usa sempre la lettura dinamica dai cgroup o dalla env var <code>resourceFieldRef</code> per evitare disallineamenti dopo un VPA resize.</p>
+<p>Se usi VPA (Vertical Pod Autoscaler), i <code>cpu.limits</code> possono cambiare dinamicamente. Configurazioni hardcoded di GOMAXPROCS, worker count, o thread pool non si adatteranno. Le env var <code>resourceFieldRef</code> sono risolte all'avvio del container e <strong>non</strong> si aggiornano con un resize (anche in-place): servono un restart o una lettura periodica dei cgroup. Go ≥ 1.25 aggiorna GOMAXPROCS da solo; per gli altri runtime verifica il comportamento dopo il resize.</p>
 </div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25882,9 +25925,9 @@
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="c1"># Se Threads &gt;&gt; cpu.limit × 4 → over-provisioned</span>
 </span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>
 </span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="c1"># 2. Per Go — verificare GOMAXPROCS</span>
-</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>--<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">'GOMAXPROCS_CHECK=$(GOMAXPROCS=? /proc/1/exe 2&gt;&amp;1); echo $GOMAXPROCS_CHECK'</span>
-</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># Oppure via pprof:</span>
-</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>curl<span class="w"> </span>http://localhost:6060/debug/pprof/goroutine?debug<span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-5
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="c1"># Il valore effettivo si vede solo dal processo: logga runtime.GOMAXPROCS(0) all'avvio</span>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># (automaxprocs lo logga già da solo). Intanto confronta i thread con il limit:</span>
+</span><span id="__span-30-8"><a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>--<span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'Threads'</span><span class="w"> </span>/proc/1/status
 </span><span id="__span-30-9"><a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a>
 </span><span id="__span-30-10"><a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a><span class="c1"># 3. Aumentare cpu.limit (se il carico è legittimo)</span>
 </span><span id="__span-30-11"><a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>resources<span class="w"> </span>deployment/&lt;name&gt;<span class="w"> </span>--limits<span class="o">=</span><span class="nv">cpu</span><span class="o">=</span>2000m
@@ -25897,7 +25940,7 @@
 </span></code></pre></div>
 <h3 id="scenario-2-oom-kill-con-memoria-apparentemente-sufficiente">Scenario 2 — OOM kill con memoria apparentemente sufficiente<a class="headerlink" href="#scenario-2-oom-kill-con-memoria-apparentemente-sufficiente" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Il pod viene OOM killed (<code>exit code 137</code>) ma <code>kubectl top pod</code> mostrava memoria &lt; limit.</p>
-<p><strong>Causa:</strong> <code>kubectl top</code> mostra la memoria RSS del processo principale, ma non conteggia: file system cache, buffer kernel, o la memoria aggregata di tutti i processi (worker Gunicorn, cluster Node.js). Il <code>memory.limit</code> del cgroup conta tutta la memoria del container.</p>
+<p><strong>Causa:</strong> <code>kubectl top</code> mostra il <em>working set</em> (usage meno file cache inattiva), campionato a intervalli: un picco breve tra due campioni non si vede. Inoltre il <code>memory.limit</code> del cgroup conta la memoria di tutti i processi (worker Gunicorn, cluster Node.js), page cache attiva e memoria kernel del container.</p>
 <p><strong>Soluzione:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># 1. Verificare memoria reale del container (inclusi tutti i processi)</span>
 </span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-it<span class="w"> </span>&lt;pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/sys/fs/cgroup/memory/memory.usage_in_bytes
