@@ -7,9 +7,10 @@ search_keywords: [opentelemetry sdk, OTel SDK, strumentazione, instrumentazione,
 parent: dev/resilienza/_index
 related: [monitoring/fondamentali/opentelemetry, monitoring/tools/jaeger-tempo, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go, dev/resilienza/health-checks]
 official_docs: https://opentelemetry.io/docs/instrumentation/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-28
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Observability da Codice — OpenTelemetry SDK
@@ -76,9 +77,9 @@ start:    2026-03-28T10:00:00.000Z
 end:      2026-03-28T10:00:00.120Z  (durata: 120ms)
 
 attributes:
-  http.method = "POST"
-  http.url    = "/orders"
-  http.status_code = 200
+  http.request.method = "POST"
+  url.path    = "/orders"
+  http.response.status_code = 200
   order.id    = "ORD-12345"   ← attributo custom
   customer.tier = "premium"    ← attributo custom
 
@@ -91,7 +92,7 @@ status: OK | ERROR | UNSET
 
 ### Context Propagation — W3C TraceContext
 
-Il trace context si propaga tra servizi tramite header HTTP standard **W3C TraceContext** (RFC 7230):
+Il trace context si propaga tra servizi tramite header HTTP standard **W3C TraceContext** (specifica W3C Recommendation, non una RFC IETF):
 
 ```
 traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
@@ -175,7 +176,8 @@ OTEL_TRACES_SAMPLER=parentbased_traceidratio
 OTEL_TRACES_SAMPLER_ARG=0.1
 # Disabilita instrumentazione specifica se troppo verbosa
 OTEL_INSTRUMENTATION_JDBC_ENABLED=true
-OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED=true  # log correlation automatica
+OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED=true  # esporta i log via OTLP (con trace context nel record)
+OTEL_INSTRUMENTATION_LOGBACK_MDC_ENABLED=true       # inietta trace_id/span_id nel MDC (default con l'agent)
 ```
 
 ### Java — Manual Instrumentation
@@ -184,6 +186,7 @@ Per tracciare logica business, aggiungere attributi domain-specific, o gestire e
 
 ```xml
 <!-- pom.xml — solo la API OTel, non l'SDK (l'agent lo porta lui) -->
+<!-- REVIEW: verificare versioni correnti (api, spring-boot-starter, logback-appender); meglio importare il BOM opentelemetry-instrumentation-bom -->
 <dependency>
     <groupId>io.opentelemetry</groupId>
     <artifactId>opentelemetry-api</artifactId>
@@ -200,10 +203,12 @@ Per tracciare logica business, aggiungere attributi domain-specific, o gestire e
 ```java
 // OrderService.java — manual instrumentation con OTEL API
 import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 
 @Service
@@ -241,7 +246,7 @@ public class OrderService {
                     payment.getTransactionId()
                 ));
 
-            span.setStatus(StatusCode.OK);
+            // Nessun setStatus(OK): UNSET = successo. OK è riservato a una conferma esplicita dell'applicazione
             return new OrderResult(request.getOrderId(), payment);
 
         } catch (PaymentException e) {
@@ -258,7 +263,7 @@ public class OrderService {
 
 ### Java — Log Correlation con MDC
 
-La correlazione tra log e tracce avviene tramite MDC (Mapped Diagnostic Context). Con l'agent OTel e `opentelemetry-logback-appender`, il `trace_id` e lo `span_id` vengono iniettati automaticamente in ogni log statement.
+La correlazione tra log e tracce avviene tramite MDC (Mapped Diagnostic Context). Con l'agent OTel, la strumentazione `logback-mdc` (attiva di default) inietta `trace_id`, `span_id` e `trace_flags` nel MDC di ogni log statement. Senza agent si usa la libreria `opentelemetry-logback-mdc-1.0`. Diverso è l'`opentelemetry-logback-appender`, che *esporta* i log via OTLP (vedi Troubleshooting).
 
 ```xml
 <!-- logback-spring.xml — pattern con trace_id e span_id dal MDC -->
@@ -417,15 +422,18 @@ public class OrderService
 ### .NET — Log Correlation con ILogger
 
 ```csharp
-// Con OpenTelemetry.Extensions.Logging, trace_id e span_id
-// vengono aggiunti automaticamente ai log via LogContext.
-// Output JSON include trace_id, span_id, trace_flags.
+// ILogger aggiunge TraceId/SpanId/ParentId agli scope del log quando c'è un'Activity
+// attiva (ActivityTrackingOptions, default in ASP.NET Core). Vanno resi visibili
+// abilitando gli scope nel formatter, altrimenti non compaiono nell'output.
+// In alternativa, builder.Logging.AddOpenTelemetry(...) esporta i log via OTLP
+// con trace context incluso.
 
 // appsettings.json
 {
   "Logging": {
     "Console": {
-      "FormatterName": "json"  // richiede formatter JSON per log strutturati
+      "FormatterName": "json",  // formatter JSON per log strutturati
+      "FormatterOptions": { "IncludeScopes": true }
     }
   }
 }
@@ -453,7 +461,9 @@ using (_logger.BeginScope(new Dictionary<string, object>
 
 ### Go — Auto-Instrumentation
 
-Go non supporta auto-instrumentation via bytecode (è compilato). L'auto-instrumentation si ottiene usando le **instrumentation libraries** OTel che wrappano le librerie standard:
+Go non supporta auto-instrumentation via bytecode (è compilato). Nel modo standard si usano le **instrumentation libraries** OTel che wrappano le librerie (richiede una modifica minima al codice). Esiste anche auto-instrumentation via eBPF (OpenTelemetry Go Auto-Instrumentation, Linux, sidecar/agent privilegiato), meno matura e con meno controllo.
+
+<!-- REVIEW: verificare versioni correnti dei moduli Go (otel, contrib, semconv) e stato dell'auto-instrumentation eBPF -->
 
 ```go
 // go.mod dependencies per auto-instrumentation delle librerie
@@ -476,21 +486,24 @@ package main
 import (
     "context"
     "log"
+    "net/http"
     "os"
+    "time"
 
+    "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
     "go.opentelemetry.io/otel"
     "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+    "go.opentelemetry.io/otel/propagation"
     "go.opentelemetry.io/otel/sdk/resource"
     "go.opentelemetry.io/otel/sdk/trace"
     semconv "go.opentelemetry.io/otel/semconv/v1.24.0"
 )
 
 func initTracerProvider(ctx context.Context) (func(context.Context) error, error) {
-    // Exporter OTLP via gRPC (preferito in produzione per efficienza)
-    exporter, err := otlptracegrpc.New(ctx,
-        otlptracegrpc.WithEndpoint(getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317")),
-        otlptracegrpc.WithInsecure(), // rimuovere in produzione — usare TLS
-    )
+    // Exporter OTLP via gRPC. Endpoint letto da OTEL_EXPORTER_OTLP_ENDPOINT
+    // (URL con schema, es. http://otel-collector:4317); default localhost:4317.
+    // Con schema http:// la connessione è insecure; in produzione usare https:// (TLS).
+    exporter, err := otlptracegrpc.New(ctx)
     if err != nil {
         return nil, err
     }
@@ -522,6 +535,10 @@ func initTracerProvider(ctx context.Context) (func(context.Context) error, error
         )),
     )
     otel.SetTracerProvider(tp)
+    // OBBLIGATORIO in Go: il propagator globale di default è no-op. Senza questa riga
+    // otelhttp/otelgrpc non iniettano né estraggono traceparent e le trace si spezzano.
+    otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+        propagation.TraceContext{}, propagation.Baggage{}))
     return tp.Shutdown, nil
 }
 
@@ -597,7 +614,7 @@ func (s *Service) ProcessOrder(ctx context.Context, req OrderRequest) (*OrderRes
         attribute.String("payment.method", payment.Method),
         attribute.String("payment.transaction_id", payment.TransactionID),
     )
-    span.SetStatus(codes.Ok, "")
+    // Nessun SetStatus(codes.Ok): UNSET = successo
 
     return &OrderResult{OrderID: req.OrderID, Payment: payment}, nil
 }
@@ -652,16 +669,16 @@ try (Scope scope = extractedCtx.makeCurrent()) {
 ```
 
 ```go
-// gRPC: automatico con otelgrpc interceptors
+// gRPC: automatico con gli stats handler di otelgrpc
+// (gli interceptor UnaryServerInterceptor & co. sono deprecati/rimossi nelle versioni recenti)
 // Server:
 grpcServer := grpc.NewServer(
-    grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()),
-    grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor()),
+    grpc.StatsHandler(otelgrpc.NewServerHandler()),
 )
 // Client:
-conn, err := grpc.Dial(addr,
-    grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),
-    grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()),
+conn, err := grpc.NewClient(addr,
+    grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+    grpc.WithTransportCredentials(insecure.NewCredentials()), // solo dev; in produzione TLS
 )
 ```
 
@@ -689,7 +706,7 @@ span.SetAttributes(attribute.String("tenant.id", tenantID))
 ```
 
 !!! warning "Baggage e Performance"
-    Il baggage viaggia in ogni header HTTP/gRPC del sistema. Evita di inserire valori grandi (> 100 byte) o un numero elevato di chiavi. Per informazioni voluminose, usa database/cache e propaga solo la chiave di lookup nel baggage.
+    Il baggage viaggia in ogni header HTTP/gRPC del sistema, **anche verso servizi di terze parti** chiamati dal client strumentato: non metterci dati sensibili. Evita di inserire valori grandi (> 100 byte) o un numero elevato di chiavi. Per informazioni voluminose, usa database/cache e propaga solo la chiave di lookup nel baggage.
 
 ### SDK Configuration — OTLP, Sampling, Resource
 
@@ -697,7 +714,7 @@ span.SetAttributes(attribute.String("tenant.id", tenantID))
 # Configurazione completa via env vars (valida per tutti i linguaggi)
 
 # --- Exporter OTLP ---
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317  # gRPC (default)
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317  # gRPC (default per l'agent Java e Go; .NET default http/protobuf nelle versioni recenti)
 # oppure per HTTP/protobuf:
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf  # grpc | http/protobuf | http/json
@@ -742,7 +759,7 @@ OTEL_LOGS_EXPORTER=otlp  # attiva export dei log via OTLP (richiede SDK + append
     Gli span attributes vengono inviati al backend di tracing (Jaeger, Tempo, Datadog). Non inserire: password, token, numeri di carta, dati personali identificativi. Per i dati necessari al debug, usa hash o truncation. Il Collector OTel può applicare attribute filtering prima dell'export.
 
 !!! warning "Span.End() è obbligatorio"
-    Uno span non terminato non viene mai esportato e rimane in memoria nel buffer dello SDK. In Java/Go usare `defer span.End()` come prima istruzione dopo `Start`. In .NET usare `using var activity = ...` che chiama `Dispose()` (= `End()`) automaticamente.
+    Uno span non terminato non viene mai esportato e rimane in memoria nel buffer dello SDK. In Go usare `defer span.End()` come prima istruzione dopo `Start`; in Java chiamare `span.end()` in un blocco `finally`. In .NET usare `using var activity = ...` che chiama `Dispose()` (= `End()`) automaticamente.
 
 **Pattern consigliati:**
 - Span name: usa `"VerbNoun"` o `"Service/Operation"` — evita path dinamici (`"/orders/12345"` → usa attributo `http.route = "/orders/{id}"`)
@@ -766,7 +783,7 @@ OTEL_LOGS_EXPORTER=otlp  # attiva export dei log via OTLP (richiede SDK + append
 -Dotel.javaagent.debug=true
 
 # Tutti i linguaggi: imposta l'exporter console per verifica locale
-OTEL_TRACES_EXPORTER=console  # stampa span su stdout, conferma che l'SDK funziona
+OTEL_TRACES_EXPORTER=console  # stampa span su stdout (.NET/Go/altri). Java agent: OTEL_TRACES_EXPORTER=logging
 
 # Verifica connettività al collector
 curl -v http://otel-collector:4318/v1/traces  # per OTLP HTTP
@@ -779,10 +796,13 @@ kubectl logs deploy/otel-collector -n monitoring | grep -E "error|refused|connec
 **Soluzione:**
 ```bash
 # Verifica che endpoint e porta siano corretti
-# gRPC: porta 4317  — non http:// nel endpoint per gRPC
-OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317  # NO http:// per gRPC
-# HTTP: porta 4318  — con http:// nel endpoint
+# La variabile d'ambiente vuole un URL COMPLETO con schema (http:// o https://)
+# gRPC: porta 4317 + OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+# HTTP: porta 4318 + OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+# Errore tipico: porta/protocollo incrociati (protocol=grpc su 4318, o http/protobuf su 4317).
+# Solo l'opzione di codice Go WithEndpoint() vuole host:port senza schema.
 ```
 
 ---
@@ -830,12 +850,11 @@ resp, err := client.Post(url, ...)  // propaga automaticamente traceparent
 
 **Diagnosi:**
 ```bash
-# Java: profila l'overhead dell'agent
+# Java: abilita il debug dell'agent e cerca span scartati dalla coda del batch processor
 -Dotel.javaagent.debug=true
-# Cerca: "Dropped spans due to full queue" — indica che il batch processor è saturo
 
-# Controlla il numero di span al secondo
-curl http://otel-collector:8888/metrics | grep otelcol_processor_batch_batch_send_size
+# Lato Collector: span ricevuti e rifiutati (metriche interne, porta 8888)
+curl -s http://otel-collector:8888/metrics | grep -E "otelcol_receiver_(accepted|refused)_spans"
 ```
 
 **Soluzione:**
@@ -845,12 +864,13 @@ OTEL_TRACES_SAMPLER=parentbased_traceidratio
 OTEL_TRACES_SAMPLER_ARG=0.05  # 5% invece di 100%
 
 # 2. Disabilita instrumentation verbose non necessaria (Java agent)
-OTEL_INSTRUMENTATION_METHODS_INCLUDE=""  # rimuove metodi custom
-OTEL_INSTRUMENTATION_JDBC_STATEMENT_SANITIZER_ENABLED=true  # riduce attributo SQL
+OTEL_INSTRUMENTATION_JDBC_ENABLED=false   # esempio: spegne la strumentazione JDBC
+# (pattern: OTEL_INSTRUMENTATION_<NOME>_ENABLED=false)
 
-# 3. Aumenta il batch size per ridurre frequenza di export
+# 3. Tuning del batch span processor (i valori sotto sono i default)
+OTEL_BSP_MAX_QUEUE_SIZE=2048          # alzare se compaiono span scartati
 OTEL_BSP_MAX_EXPORT_BATCH_SIZE=512
-OTEL_BSP_SCHEDULE_DELAY=5000  # 5 secondi tra batch (default: 5000ms)
+OTEL_BSP_SCHEDULE_DELAY=5000          # ms tra batch
 ```
 
 ---
@@ -862,8 +882,11 @@ OTEL_BSP_SCHEDULE_DELAY=5000  # 5 secondi tra batch (default: 5000ms)
 **Causa:** Il log appender OTel non è configurato o il log avviene fuori da uno span attivo.
 
 **Soluzione Java (Logback):**
+
+Con l'agent il MDC è già popolato (`logback-mdc`); verifica che il pattern/encoder includa `trace_id`/`span_id` (vedi sopra). Senza agent aggiungi `opentelemetry-logback-mdc-1.0` (correlazione nei log su stdout) e/o l'appender sotto (export dei log via OTLP):
+
 ```xml
-<!-- pom.xml: aggiungi l'appender OTel per Logback -->
+<!-- pom.xml: appender OTel per Logback (export OTLP dei log) -->
 <dependency>
     <groupId>io.opentelemetry.instrumentation</groupId>
     <artifactId>opentelemetry-logback-appender-1.0</artifactId>
