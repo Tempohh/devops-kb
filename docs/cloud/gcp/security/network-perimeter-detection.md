@@ -7,9 +7,10 @@ search_keywords: [Cloud Armor, GCP WAF, Google Cloud Armor, VPC Service Controls
 parent: cloud/gcp/security/_index
 related: [cloud/gcp/security/kms-secret-manager, cloud/gcp/iam/iam-service-accounts, cloud/gcp/networking/vpc, cloud/aws/security/network-security, cloud/aws/security/compliance-audit]
 official_docs: https://cloud.google.com/armor/docs
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Protezione di Rete e Detection su GCP
@@ -105,6 +106,9 @@ Richiesta da IP ufficio (Access Level) → permessa anche se il client è fuori 
 | Compliance reports | No | Sì (CIS, PCI-DSS, NIST mapping automatico) |
 | Integrazione Cloud Asset Inventory | Sì | Sì, con query avanzate |
 
+!!! note "Esiste anche il tier Enterprise"
+    Oltre a Standard e Premium, SCC offre un tier **Enterprise** (CNAPP: aggiunge multicloud AWS/Azure, case management e SOAR integrato). La tabella sopra confronta solo Standard e Premium; il perimetro dei detector per tier cambia spesso, verificare sulla pagina ufficiale dei service tier.
+
 !!! tip "Standard copre già le basi più comuni"
     Molti dei finding più critici (bucket pubblici, firewall troppo permissivi, SA con `roles/editor`) sono coperti anche da SCC Standard tramite Security Health Analytics di base. Valutare Premium quando serve detection di minacce attive o compliance reporting automatico, non solo per avere "più findings".
 
@@ -119,7 +123,7 @@ Le Organization Policy (vedi anche [IAM e Service Account](../iam/iam-service-ac
 | `compute.restrictLoadBalancerCreationForTypes` | Permette solo tipi di Load Balancer approvati (es. solo interni) |
 | `storage.publicAccessPrevention` | Vieta bucket GCS pubblicamente accessibili |
 | `storage.uniformBucketLevelAccess` | Forza ACL uniformi a livello bucket (vieta ACL per singolo oggetto) |
-| `iam.allowedPolicyMemberDomains` | Vieta `allUsers`/`allAuthenticatedUsers` nelle policy IAM |
+| `iam.allowedPolicyMemberDomains` | Limita i membri IAM ai domini/customer ID Cloud Identity approvati (Domain Restricted Sharing); di conseguenza esclude `allUsers`/`allAuthenticatedUsers` |
 
 ---
 
@@ -189,7 +193,7 @@ gcloud compute security-policies rules create 1000 \
 # Sempre iniziare in preview per misurare i falsi positivi
 gcloud compute security-policies rules create 2000 \
     --security-policy=prod-waf-policy \
-    --expression="evaluatePreconfiguredExpr('sqli-v33-stable', ['owasp-crs-v030301-id942100-sqli'])" \
+    --expression="evaluatePreconfiguredWaf('sqli-v33-stable', {'sensitivity': 1})" \
     --action=deny-403 \
     --preview \
     --description="SQLi OWASP CRS - PREVIEW"
@@ -243,14 +247,14 @@ gcloud access-context-manager levels create office_network \
     --basic-level-spec=/tmp/access-level.yaml
 
 # ── CREARE IL PERIMETRO IN DRY-RUN (OBBLIGATORIO PRIMA DELL'ENFORCING) ─
-gcloud access-context-manager perimeters create prod_data_perimeter \
+# (il sottogruppo `dry-run` crea la config di sola simulazione: i flag hanno prefisso --perimeter-)
+gcloud access-context-manager perimeters dry-run create prod_data_perimeter \
     --policy=ACCESS_POLICY_ID \
-    --title="Prod Data Perimeter" \
-    --resources=projects/PROJECT_NUMBER_BIGQUERY,projects/PROJECT_NUMBER_GCS \
-    --restricted-services=bigquery.googleapis.com,storage.googleapis.com \
-    --access-levels=office_network \
+    --perimeter-title="Prod Data Perimeter" \
     --perimeter-type=regular \
-    --dry-run
+    --perimeter-resources=projects/PROJECT_NUMBER_BIGQUERY,projects/PROJECT_NUMBER_GCS \
+    --perimeter-restricted-services=bigquery.googleapis.com,storage.googleapis.com \
+    --perimeter-access-levels=accessPolicies/ACCESS_POLICY_ID/accessLevels/office_network
 
 # ── VERIFICARE LE VIOLAZIONI LOGGATE IN DRY-RUN (prima di enforce) ───
 gcloud logging read \
@@ -283,7 +287,7 @@ gcloud scc findings list ORGANIZATION_ID \
 gcloud scc findings list ORGANIZATION_ID \
     --filter='category="PUBLIC_BUCKET_ACL" AND state="ACTIVE"'
 
-# ── MUTARE LO STATO DI UN FINDING (dopo remediation) ─────────────────
+# ── CAMBIARE LO STATO DI UN FINDING (dopo remediation; per silenziarlo senza risolverlo si usa il mute) ─
 gcloud scc findings update FINDING_ID \
     --organization=ORGANIZATION_ID \
     --source=SOURCE_ID \
@@ -352,7 +356,7 @@ gcloud compute security-policies rules list \
     --format="table(priority, match.expr.expression, action)" \
     --sort-by=priority
 
-# Spostare la regola specifica a priorità più bassa (es. da 5000 a 500)
+# Dare alla regola specifica un numero di priorità più piccolo, cioè valutata prima (es. da 5000 a 500)
 gcloud compute security-policies rules update 5000 \
     --security-policy=prod-waf-policy \
     --new-priority=500
@@ -426,7 +430,7 @@ gcloud compute security-policies rules list \
 
 ### PERMISSION_DENIED vs VPC-SC violation — distinguere le due cause
 
-1. Leggere il messaggio di errore completo: `PERMISSION_DENIED` puro è IAM; `Request is prohibited by organization's policy` è VPC-SC
+1. Leggere il messaggio di errore completo: entrambi arrivano come HTTP 403 / `PERMISSION_DENIED`, ma `Permission 'x' denied on resource` indica IAM, mentre `Request is prohibited by organization's policy` (con un `vpcServiceControlsUniqueIdentifier`) indica VPC-SC
 2. Un errore IAM si risolve con un binding (`add-iam-policy-binding`); un errore VPC-SC richiede un Access Level o una Ingress/Egress Rule — un binding IAM aggiuntivo non ha alcun effetto
 3. Verificare sempre il log `VpcServiceControlAuditMetadata` prima di modificare permessi IAM per un errore che in realtà è di perimetro
 
