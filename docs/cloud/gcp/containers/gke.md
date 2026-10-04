@@ -5,18 +5,19 @@ category: cloud/gcp/containers
 tags: [gcp, kubernetes, gke, containers, autopilot, workload-identity, node-pools, managed-kubernetes]
 search_keywords: [GKE, Google Kubernetes Engine, Kubernetes managed GCP, Autopilot GKE, Standard GKE, Workload Identity, node pool GKE, release channel GKE, upgrade automatico Kubernetes, cluster GKE, GKE Autopilot vs Standard, container GCP, managed K8s Google, GKE cluster regionale, GKE zonal cluster, kubectl GCP, gcloud container, Binary Authorization GKE, GKE Sandbox, cluster autoscaler GKE, preemptible node pool, spot node pool, GKE logging, GKE monitoring, Cloud Logging GKE, Cloud Monitoring GKE, Artifact Registry GCP, GKE networking, VPC-native cluster, alias IP, GKE ingress, GKE load balancer, GKE upgrade, surge upgrade, blue-green upgrade, node auto-provisioning, GKE ARM, confidential nodes, GKE cost optimization, node taints GKE]
 parent: cloud/gcp/containers/_index
-related: [containers/kubernetes/architettura, containers/kubernetes/workloads, containers/kubernetes/networking, containers/kubernetes/sicurezza, cloud/gcp/fondamentali/panoramica]
+related: [containers/kubernetes/architettura, containers/kubernetes/workloads, containers/kubernetes/networking, containers/kubernetes/sicurezza, cloud/gcp/fondamentali/panoramica, cloud/gcp/compute/cloud-run]
 official_docs: https://cloud.google.com/kubernetes-engine/docs
-status: complete
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-03-25
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Google Kubernetes Engine (GKE)
 
 ## Panoramica
 
-Google Kubernetes Engine (GKE) è il servizio Kubernetes managed di Google Cloud, disponibile dal 2014 — il primo managed Kubernetes del mercato, costruito da chi ha inventato Kubernetes stesso. GKE gestisce l'intero lifecycle del control plane (API server, etcd, scheduler, controller manager) e offre automazione avanzata per node upgrades, scalabilità e sicurezza.
+Google Kubernetes Engine (GKE) è il servizio Kubernetes managed di Google Cloud, in GA dal 2015 — tra i primi managed Kubernetes del mercato, costruito da chi ha inventato Kubernetes stesso. GKE gestisce l'intero lifecycle del control plane (API server, etcd, scheduler, controller manager) e offre automazione avanzata per node upgrades, scalabilità e sicurezza.
 
 **Quando usare GKE:**
 - Workload containerizzati su GCP che richiedono orchestrazione complessa
@@ -25,7 +26,7 @@ Google Kubernetes Engine (GKE) è il servizio Kubernetes managed di Google Cloud
 - Scenari multi-tenant con isolamento forte tra workload
 
 **Quando valutare alternative:**
-- Applicazioni stateless semplici → **Cloud Run** (serverless containers, zero management)
+- Applicazioni stateless semplici → **Cloud Run** (serverless containers, zero management; vedi [Cloud Run](../compute/cloud-run.md))
 - Jobs batch o pipeline → **Cloud Run Jobs** o **Dataflow**
 - Vincoli di budget ridotti con team piccolo → Cloud Run costa meno di un cluster GKE
 
@@ -48,8 +49,8 @@ La scelta tra Autopilot e Standard è la decisione architetturale più important
 | Node sizing | Automatico | Manuale (scegli il machine type) |
 | Scaling | Automatico, immediato | Cluster Autoscaler (più lento) |
 | Accesso SSH ai nodi | Non disponibile | Disponibile |
-| DaemonSet personalizzati | Non supportati | Supportati |
-| Privileged containers | Non supportati | Supportati |
+| DaemonSet personalizzati | Supportati con restrizioni (no privilegi, risorse fatturate) | Supportati |
+| Privileged containers | Non supportati (salvo workload partner in allowlist) | Supportati |
 | GPU/TPU | Supportati (selezione automatica) | Supportati |
 | Best per | Team che vogliono zero-ops | Team con requisiti infra specifici |
 
@@ -60,7 +61,7 @@ Autopilot è la scelta giusta se:
 ├── Non hai competenze infra dedicate a gestire nodi K8s
 ├── I tuoi workload sono standard (Deployment, StatefulSet, Job)
 ├── Vuoi pagare solo per le risorse Pod effettive, non per nodi idle
-├── Non usi DaemonSet personalizzati o containers privilegiati
+├── Non usi containers privilegiati (i DaemonSet non privilegiati vanno bene)
 └── Priorità: time-to-market e semplicità operativa
 ```
 
@@ -68,7 +69,7 @@ Autopilot è la scelta giusta se:
 
 ```
 Standard è necessario se:
-├── Usi DaemonSet personalizzati (log forwarder, security agent)
+├── Usi DaemonSet che richiedono privilegi o accesso all'host (security agent, CNI custom)
 ├── Hai containers privilegiati o con capabilities avanzate
 ├── Hai bisogno di SSH/debug diretto sui nodi
 ├── Usi hardware specifico (GPU/TPU con configurazioni non standard)
@@ -106,8 +107,13 @@ In GKE il control plane è **completamente managed da Google**:
 
 | Tipo | Control Plane | Nodi | Disponibilità | Costo |
 |------|--------------|------|---------------|-------|
-| **Zonale** | 1 zona | 1 zona | Downtime durante upgrade | Gratuito |
-| **Regionale** | 3 zone | 3 zone (distribuite) | Upgrade senza downtime | ~$0.10/h |
+| **Zonale** | 1 zona | 1 zona | API server down durante upgrade del control plane | Cluster management fee $0.10/h |
+| **Regionale** | 3 zone | 3 zone (distribuite) | Upgrade senza downtime | Cluster management fee $0.10/h |
+
+La **cluster management fee** ($0.10/h per cluster) vale per Autopilot e Standard, zonali e regionali; il free tier concede un credito mensile di $74.40 per billing account, che copre un cluster zonale o Autopilot (non uno regionale Standard). Verificare gli importi su [GKE Pricing](https://cloud.google.com/kubernetes-engine/pricing).
+
+!!! note "`--num-nodes` è per zona"
+    Nei cluster regionali `--num-nodes`, `--min-nodes` e `--max-nodes` si applicano **a ogni zona**: `--num-nodes=2` su 3 zone crea 6 nodi. Per limiti sul totale usare `--total-min-nodes` / `--total-max-nodes` con `--location-policy`.
 
 !!! warning "Cluster Zonale in Produzione"
     Un cluster **zonale** ha il control plane in una sola zona: durante un upgrade del control plane (che avviene automaticamente), l'API server è irraggiungibile per alcuni minuti. **In produzione usare sempre cluster regionali.**
@@ -242,12 +248,15 @@ GKE organizza gli upgrade Kubernetes in 3 **release channel**:
 
 | Channel | Kubernetes Version | Cadenza | Use Case |
 |---------|-------------------|---------|----------|
-| **Rapid** | Più recente | Settimane | Test, bleeding-edge features |
-| **Regular** | N-1 minor | ~1 mese | Produzione standard (consigliato) |
-| **Stable** | N-2 minor | ~3 mesi | Produzione con requisiti di stabilità massima |
+| **Rapid** | Nuove minor subito dopo il rilascio upstream | Più frequente | Test, nuove feature |
+| **Regular** | Nuove minor dopo qualche mese di soak in Rapid | Intermedia | Produzione standard (default consigliato) |
+| **Stable** | Solo versioni già mature in Regular | Meno frequente | Produzione con requisiti di stabilità massima |
+| **Extended** | Come Regular, ma supporto minor fino a 24 mesi (a pagamento oltre i 14 mesi standard) | Upgrade minori forzati più rari | Chi non può seguire il ritmo di ~3 minor/anno |
+
+Il canale determina **quali versioni sono disponibili e quando scattano gli upgrade automatici**: GKE aggiorna control plane e nodi in base al canale, nei limiti di maintenance window ed exclusion configurate. Le date esatte per versione sono nel [release schedule](https://cloud.google.com/kubernetes-engine/docs/release-schedule).
 
 ```bash
-# Impostare il release channel (solo al momento della creazione per il control plane)
+# Creare un cluster Standard con un release channel (i cluster nuovi sono enrolled in Regular se omesso)
 gcloud container clusters create my-cluster \
     --release-channel=regular \
     ...
@@ -261,15 +270,16 @@ gcloud container clusters update my-cluster \
 gcloud container get-server-config --region=europe-west8
 
 # Aggiornare manualmente il control plane a una versione specifica
+# (usare una versione elencata da get-server-config per il proprio canale)
 gcloud container clusters upgrade my-cluster \
     --master \
-    --cluster-version=1.30.5-gke.1234567 \
+    --cluster-version=<VERSIONE-GKE> \
     --region=europe-west8
 
 # Aggiornare un node pool (surge upgrade: 1 nodo extra durante upgrade)
 gcloud container clusters upgrade my-cluster \
     --node-pool=default-pool \
-    --cluster-version=1.30.5-gke.1234567 \
+    --cluster-version=<VERSIONE-GKE> \
     --region=europe-west8
 ```
 
@@ -294,7 +304,16 @@ Pod
         └── ha ruoli → roles/storage.objectViewer, roles/cloudsql.client
 ```
 
-Il Pod ottiene un token OIDC dall'API server GKE → le librerie client GCP lo scambiano con un token IAM → accesso al servizio GCP senza segreti.
+Il Pod ottiene un token OIDC (service account token del KSA) → le librerie client GCP lo scambiano via Security Token Service con un token IAM → accesso al servizio GCP senza segreti. Il nome ufficiale odierno è **Workload Identity Federation for GKE**; Autopilot e i cluster nuovi hanno il workload pool già abilitato.
+
+!!! tip "Variante moderna: accesso diretto senza GSA"
+    Invece di impersonare un GSA, si può assegnare il ruolo IAM direttamente al principal del KSA, evitando annotazione e binding `workloadIdentityUser`:
+    ```bash
+    gcloud projects add-iam-policy-binding my-project-id \
+        --role="roles/storage.objectViewer" \
+        --member="principal://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/my-project-id.svc.id.goog/subject/ns/my-namespace/sa/my-app-ksa"
+    ```
+    Meno oggetti da gestire; il flusso con GSA sotto resta necessario per i servizi che non supportano ancora i principal federati.
 
 ### Configurazione Step-by-Step
 
@@ -349,7 +368,7 @@ spec:
       serviceAccountName: my-app-ksa  # il KSA con l'annotazione
       containers:
       - name: app
-        image: gcr.io/my-project-id/my-app:latest
+        image: europe-west8-docker.pkg.dev/my-project-id/my-repo/my-app:1.0.0
         # Le librerie client GCP rilevano automaticamente le credenziali
         # via Application Default Credentials (ADC)
 ```
@@ -423,7 +442,8 @@ kubectl describe configmap cluster-autoscaler-status \
 
 ```yaml
 # Annotation per evitare che il CA dreni un nodo specifico
-# (utile per nodi con workload con stato che non devono essere migrati)
+# Annotation sul POD (non sul nodo): il CA non rimuove nodi che ospitano questo Pod
+# (utile per workload che non devono essere migrati)
 cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 ```
 
@@ -444,12 +464,13 @@ gcloud container clusters update my-cluster \
     --enable-autoprovisioning \
     --max-cpu=200 \
     --max-memory=2000 \
-    --autoprovisioning-resource-limits=nvidia-tesla-t4=4 \
+    --min-accelerator=type=nvidia-tesla-t4,count=0 \
+    --max-accelerator=type=nvidia-tesla-t4,count=4 \
     --region=europe-west8
 ```
 
 !!! tip "Spot VM per ridurre i costi"
-    I node pool con **Spot VM** (preemptible di seconda generazione) costano fino all'80% in meno rispetto alle VM standard. Usare per workload batch, job non critici, o sviluppo. I Pod devono tollerare il taint `cloud.google.com/gke-spot=true:NoSchedule` e supportare l'interruzione improvvisa.
+    I node pool con **Spot VM** (preemptible di seconda generazione) costano tipicamente il 60–91% in meno rispetto alle VM on-demand (sconto variabile per machine type e regione). Usare per workload batch, job non critici, o sviluppo. I Pod devono tollerare il taint `cloud.google.com/gke-spot=true:NoSchedule` e supportare l'interruzione improvvisa.
 
 ---
 
@@ -459,7 +480,7 @@ gcloud container clusters update my-cluster \
     In produzione, creare namespace dedicati per ogni applicazione/team. Il namespace `default` non ha quote, network policy, o resource limits — un bug può saturare il cluster intero.
 
 !!! warning "Impostare sempre requests e limits"
-    Senza `resources.requests`, il Cluster Autoscaler non sa quanta capacità serve e scala male. Senza `resources.limits`, un container buggy può consumare tutto il nodo. In GKE Autopilot i limits sono **obbligatori** — il Pod viene rifiutato senza.
+    Senza `resources.requests`, il Cluster Autoscaler non sa quanta capacità serve e scala male. Senza `resources.limits`, un container buggy può consumare tutto il nodo. In GKE Autopilot le `requests` determinano anche la **fatturazione** (si paga per Pod): se omesse Autopilot applica valori di default, e le richieste vengono arrotondate ai minimi/incrementi supportati — dichiararle esplicitamente evita sorprese di costo.
 
 ```yaml
 # Template risorse corretto per GKE
@@ -473,7 +494,7 @@ resources:
 ```
 
 !!! tip "Cluster Privato per Produzione"
-    Un **cluster privato** ha i nodi senza IP pubblico. L'accesso al control plane avviene tramite IP privato o via Cloud NAT per il traffico uscente. Riduce drasticamente la superficie di attacco. Da abilitare al momento della creazione (non modificabile dopo).
+    Un **cluster privato** ha i nodi senza IP pubblico. L'accesso al control plane avviene tramite IP privato o via Cloud NAT per il traffico uscente. Riduce drasticamente la superficie di attacco. Conviene decidere alla creazione: versioni recenti consentono di abilitare i nodi privati anche su cluster esistenti, ma con ricreazione dei nodi. Serve Cloud NAT per l'egress verso Internet (es. pull da registry esterni).
 
 ```bash
 # Cluster Standard privato (nodi senza IP pubblici)
@@ -494,7 +515,7 @@ gcloud container clusters create my-private-cluster \
 - [ ] **Release channel Regular** per produzione
 - [ ] Resource `requests` e `limits` su tutti i container
 - [ ] **PodDisruptionBudget** su servizi critici per upgrade senza downtime
-- [ ] **NetworkPolicy** per isolare namespace
+- [ ] **NetworkPolicy** per isolare namespace (su Standard richiede enforcement abilitato: **Dataplane V2**, consigliato, o Calico; Autopilot usa Dataplane V2)
 - [ ] Abilitare **Binary Authorization** per trusted images
 - [ ] Separare node pool per workload diversi (spot, GPU, highmem)
 - [ ] Monitoring con **Cloud Monitoring** e alert su CPU/memory node pressure
@@ -524,9 +545,10 @@ kubectl get nodes --show-labels
 kubectl describe nodes | grep -A5 Taints
 ```
 
-**Problema: `Error: failed to create containerd task` — immagine non trovata**
+**Problema: Pod in `ImagePullBackOff` / `ErrImagePull` — immagine non scaricabile**
 ```bash
-# Causa: il nodo non ha permessi per pullare da Artifact Registry / Container Registry
+# Causa: tag inesistente, oppure il nodo non ha permessi per pullare da Artifact Registry
+# (Container Registry gcr.io è dismesso: migrare ad Artifact Registry)
 # Diagnosi
 kubectl get events --field-selector reason=Failed -n <namespace>
 
@@ -582,7 +604,7 @@ kubectl get events --field-selector involvedObject.name=<node-name>
 # Force drain e ricrea il nodo (Standard)
 kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
 gcloud compute instances delete <node-name> --zone=<zone>
-# Il cluster autoscaler ricrea il nodo automaticamente
+# Il managed instance group del node pool ricrea la VM per mantenere la dimensione target
 ```
 
 **Problema: upgrade del cluster bloccato — `UPGRADE_FAILED`**
