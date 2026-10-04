@@ -7,9 +7,9 @@ search_keywords: [crossguard, pulumi crossguard, policy as code, policy pack, pu
 parent: iac/pulumi/_index
 related: [iac/pulumi/fondamentali, iac/pulumi/stacks-ambienti, iac/terraform/testing]
 official_docs: https://www.pulumi.com/docs/using-pulumi/crossguard/
-status: needs-review
+status: reviewed
 difficulty: intermediate
-last_updated: 2026-09-27
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -82,7 +82,8 @@ CrossGuard valuta il piano **durante** `preview`/`up`, con accesso allo stato co
 !!! note "`pulumi convert` non è un export verso Terraform"
     `pulumi convert` converte programmi **verso** Pulumi (da Terraform HCL, YAML, o tra linguaggi Pulumi): non produce HCL scansionabile da checkov/tfsec.
 
-<!-- REVIEW: verificare se Pulumi Insights / audit policy groups (valutazione di risorse già esistenti, anche non gestite da Pulumi) siano ora disponibili e vadano citati nella sezione "Quando NON usare" -->
+!!! note "Audit di risorse esistenti: audit policy group (Pulumi Cloud)"
+    Pulumi Cloud offre anche gli **audit policy group**, che valutano le risorse trovate da **Discovery** (scansione schedulata degli account cloud) — incluse quelle create con CloudFormation, Terraform o console, non solo con Pulumi. Disponibili nei tier Essentials, Pro ed Enterprise. Il criterio sopra resta valido per CrossGuard in senso stretto (gate su `preview`/`up`); per l'audit di infrastruttura esistente valutare gli audit policy group o uno scanner esterno. Vedi [Pulumi Policies](https://www.pulumi.com/docs/insights/policy/).
 
 
 ## Architettura / Come Funziona
@@ -249,13 +250,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@v7
         with:
           command: preview
           stack-name: prod
-          # Il pack si passa come argomento CLI; se una policy mandatory
-          # è violata lo step fallisce (exit ≠ 0) e il job termina in errore
-          extra-args: --policy-pack ./my-org-security
+          # Input dedicato `policyPacks` (non esiste `extra-args`); se una policy
+          # mandatory è violata lo step fallisce (exit ≠ 0) e il job termina in errore
+          policyPacks: ./my-org-security
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
@@ -265,16 +266,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pulumi/actions@v6
+      - uses: pulumi/actions@v7
         with:
           command: up
           stack-name: prod
-          extra-args: --policy-pack ./my-org-security
+          policyPacks: ./my-org-security
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 ```
 
-<!-- REVIEW: verificare input `extra-args` di pulumi/actions@v6 (credenziali cloud e install dipendenze omesse per brevità) -->
+Credenziali cloud e install delle dipendenze sono omesse per brevità. Per la config del pack c'è l'input `policyPackConfigs` (path al JSON).
 
 ```bash
 # Verifica manuale dell'exit code (utile fuori da action dedicate)
@@ -286,7 +287,7 @@ echo "Exit code: $?"   # 0 = ok, diverso da 0 = almeno una mandatory violata
 
 La creazione di un policy group e l'assegnazione degli stack si fanno dalla console Pulumi Cloud (o via REST API): il gruppo `default` copre tutti gli stack dell'org, i gruppi aggiuntivi un sottoinsieme. Funzionalità di governance org-wide legata al tier di Pulumi Cloud.
 
-<!-- REVIEW: verificare che esistano sottocomandi CLI `pulumi policy group create/update --add-stack` (non confermati: la CLI documenta `pulumi policy group ls`) -->
+La CLI ha il comando `pulumi policy group` con sottocomandi `new`, `edit`, `get`, `list`, `remove` (i primi quattro marcati **EXPERIMENTAL** nella reference); non esistono `create`/`update --add-stack`. L'assegnazione degli stack resta più affidabile da console o REST API.
 
 ```bash
 # Pubblicare e abilitare la versione più recente sul gruppo
@@ -332,8 +333,8 @@ cd my-org-security && pip install -r requirements.txt
 **Soluzione:**
 ```bash
 # Elencare le policy attualmente assegnate all'organizzazione/stack
-pulumi policy group ls
-# dettaglio del gruppo e dei pack assegnati: console Pulumi Cloud
+pulumi policy group list
+# dettaglio di un gruppo e dei pack assegnati (EXPERIMENTAL): pulumi policy group get <nome>, oppure console Pulumi Cloud
 
 # Se la regola org-wide è quella che blocca, va gestita centralmente
 # (richiedere eccezione al team platform, non aggirarla in locale)
