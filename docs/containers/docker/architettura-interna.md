@@ -7,9 +7,10 @@ search_keywords: [docker internals, linux namespaces containers, cgroups docker,
 parent: containers/docker/_index
 related: [containers/container-runtime/_index, containers/docker/sicurezza]
 official_docs: https://docs.docker.com/engine/
-status: complete
+status: reviewed
 difficulty: expert
 last_updated: 2026-03-29
+last_verified: 2026-10-04
 ---
 
 # Architettura Interna Docker
@@ -28,7 +29,7 @@ Docker Architecture Stack
                 v
   +--------------------------+
   |  Docker Daemon (dockerd)  |
-  |  gRPC server             |
+  |  REST API (Engine API)   |
   |  Image management        |
   |  Volume management       |
   |  Network management      |
@@ -67,8 +68,8 @@ Docker Architecture Stack
 **Perché questo layering?**
 
 - `containerd` può essere usato direttamente (Kubernetes non usa dockerd)
-- Il shim isola il ciclo di vita del container da quello del daemon: riavviare `dockerd` non termina i container
-- `runc` è intercambiabile (gVisor, Kata, Railcar implementano la stessa OCI Runtime Spec)
+- Il shim isola il ciclo di vita del container da quello del daemon: con `live-restore: true` in `daemon.json` riavviare `dockerd` non termina i container (senza, lo stop del daemon li ferma comunque)
+- `runc` è intercambiabile (`crun`, `youki`, gVisor `runsc`, Kata sono compatibili con la OCI Runtime Spec)
 
 ---
 
@@ -137,8 +138,10 @@ ls /proc/1/ns/net   # namespace PID 1 = init = host
 **Il namespace USER** — Fondamento per Rootless Docker:
 
 ```bash
-# Con User Namespaces (rootless Docker):
-# UID 0 (root) dentro il container → mappato a UID 100000+ sull'host
+# Con User Namespaces (rootless Docker o `userns-remap` in daemon.json):
+# UID 0 (root) dentro il container → mappato a un UID non privilegiato sull'host
+# (range da /etc/subuid; con userns-remap tipicamente 100000+,
+#  in rootless UID 0 = utente che ha avviato il daemon)
 
 # /proc/$CONTAINER_PID/uid_map:
 # 0 100000 65536
@@ -175,16 +178,23 @@ cgroups v2 Hierarchy per Container
 
 ```bash
 # docker run con resource limits → cgroups v2
+# --cpus=1.5          → cpu.max = "150000 100000"
+# --cpu-shares=512    → peso relativo (cpu.weight)
+# --memory=256m       → memory.max
+# --memory-swap=256m  → memory + swap = 256m → nessun swap extra
+# --pids-limit=100    → pids.max
+# --blkio-weight=500  → io.weight
 docker run \
-    --cpus="1.5" \           # 1.5 core → cpu.max = "150000 100000"
-    --cpu-shares=512 \       # peso relativo → cpu.weight
-    --memory="256m" \        # memory.max
-    --memory-swap="256m" \   # memory + swap = 256m → nessun swap extra
-    --pids-limit=100 \       # pids.max
-    --blkio-weight=500 \     # io.weight
+    --cpus="1.5" \
+    --cpu-shares=512 \
+    --memory="256m" \
+    --memory-swap="256m" \
+    --pids-limit=100 \
+    --blkio-weight=500 \
     nginx
 
 # Leggi live resource usage
+# (path col cgroup driver systemd; con driver cgroupfs: /sys/fs/cgroup/docker/<id>/)
 cat /sys/fs/cgroup/system.slice/docker-<id>.scope/cpu.stat
 # usage_usec 1234567      ← CPU usata in microsecondi
 # user_usec  987654
@@ -207,7 +217,7 @@ cat /sys/fs/cgroup/system.slice/docker-<id>.scope/memory.pressure
 | **Memory OOM** | Behavior inconsistente | OOM killer migliorato con PSI (OOM = Out Of Memory: il kernel uccide processi quando la memoria è esaurita; PSI = Pressure Stall Information: metriche di pressione su CPU/memoria/I/O) |
 | **I/O accounting** | blkio (solo block) | io (block + filesystem) |
 | **Pressure Stall** | Non disponibile | PSI (cpu/memory/io pressure) |
-| **Support Docker** | Default su sistemi vecchi | Default da Docker 20.10+ |
+| **Support Docker** | Default su sistemi vecchi | Supportato da Docker 20.10+; è default se la distro host monta v2 (la maggior parte di quelle recenti) |
 
 ---
 
@@ -275,6 +285,9 @@ docker history nginx:1.25 --no-trunc
 # sha256... 2 weeks    COPY nginx.conf ...       1.2kB
 # sha256... 2 weeks    RUN apt-get install...    89.3MB
 ```
+
+!!! note "containerd image store"
+    Con il *containerd image store* (opt-in nelle versioni precedenti, default sulle installazioni nuove di quelle recenti) immagini e snapshot sono gestiti da containerd con lo snapshotter `overlayfs` sotto `/var/lib/containerd/`, non da `/var/lib/docker/overlay2/`. Il meccanismo overlayfs è identico; cambiano path e output di `GraphDriver`.
 
 **Copy-on-Write (CoW):**
 
@@ -421,8 +434,11 @@ docker run nginx — Sequenza Completa
      ├─► Configura cgroups (/sys/fs/cgroup/...)
      ├─► Applica seccomp profile
      ├─► Drop capabilities
-     ├─► execve("/usr/sbin/nginx", ...)  → il processo container parte
-     └─► runc termina (il shim rimane come monitor)
+     └─► `runc create` termina: l'init del container resta in attesa
+
+  5b. shim: runc start
+     └─► execve("/usr/sbin/nginx", ...)  → il processo container parte
+         (il shim rimane come monitor)
 
   6. Il container è in esecuzione
      PID 1 nel container = nginx
@@ -437,7 +453,7 @@ docker run nginx — Sequenza Completa
 
 **Sintomo:** Il container si riavvia ciclicamente; `docker ps` mostra `Restarting` o `Exited (137)`. Il codice di uscita 137 = 128 + SIGKILL.
 
-**Causa:** Il processo ha superato il `memory.max` del cgroup e il kernel OOM killer ha terminato il processo. Questo accade spesso quando il limite memoria è troppo basso o l'applicazione ha un memory leak.
+**Causa:** 137 indica solo SIGKILL (può venire anche da `docker kill`): conferma con `docker inspect --format '{{.State.OOMKilled}}' my-container`. Il processo ha superato il `memory.max` del cgroup e il kernel OOM killer ha terminato il processo. Questo accade spesso quando il limite memoria è troppo basso o l'applicazione ha un memory leak.
 
 **Soluzione:** Verificare il kill OOM nei log del kernel e aumentare il limite o correggere il leak.
 
@@ -475,7 +491,7 @@ docker run --memory="512m" --memory-swap="512m" my-image
 ```bash
 # Verifica che docker0 esista sull'host
 ip link show docker0
-# Se assente: sudo systemctl restart docker
+# Se assente: sudo systemctl restart docker  (senza live-restore ferma i container in esecuzione)
 
 # Controlla le regole iptables Docker
 sudo iptables -t nat -L DOCKER --line-numbers
