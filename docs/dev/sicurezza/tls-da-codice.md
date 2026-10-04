@@ -7,7 +7,7 @@ search_keywords: [tls codice applicativo, mtls applicazione, tls java, java ssl,
 parent: dev/sicurezza/_index
 related: [security/autenticazione/mtls-spiffe, security/pki-certificati/cert-manager, networking/fondamentali/tls-ssl-basics, dev/linguaggi/java-spring-boot, dev/linguaggi/dotnet, dev/linguaggi/go]
 official_docs: https://pkg.go.dev/crypto/tls
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -864,9 +864,13 @@ tlsCfg := &tls.Config{
 # Go: la variabile NON è letta automaticamente, serve KeyLogWriter nel codice (sotto)
 # Java: nessun supporto nativo, serve un agent/libreria esterna
 
-# .NET — imposta la variabile d'ambiente:
+# .NET 9+ — SslStream su Linux (OpenSSL); su Windows (Schannel) NON supportato.
+# Serve anche lo switch AppContext (opt-in): runtimeconfig.json
+#   "configProperties": { "System.Net.EnableSslKeyLogging": true }
+# oppure in codice: AppContext.SetSwitch("System.Net.EnableSslKeyLogging", true);
+# Poi imposta la variabile d'ambiente:
 export SSLKEYLOGFILE=/tmp/tls-keys.log
-# <!-- REVIEW: verificare versione/piattaforma minima in cui .NET legge SSLKEYLOGFILE (non verificato) -->
+# QuicConnection (.NET 9+): supportato su tutte le piattaforme, stessi switch.
 
 # Go — vedi blocco successivo
 
