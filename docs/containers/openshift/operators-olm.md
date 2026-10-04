@@ -7,7 +7,7 @@ search_keywords: [openshift OLM, Operator Lifecycle Manager, OperatorHub, Cluste
 parent: containers/openshift/_index
 related: [containers/kubernetes/operators-crd, containers/openshift/architettura]
 official_docs: https://docs.openshift.com/container-platform/latest/operators/understanding/olm/olm-understanding-olm.html
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -32,20 +32,21 @@ OLM Components
            v
   PackageManifest / OperatorHub UI
   +------------------+
-  | Operator: Vault  |
-  | Channel: stable  |
-  | Version: 1.16.0  |
+  | Operator:        |
+  |  cert-manager    |
+  | Channel:stable-v1|
+  | Version: 1.X.Y   |
   +--------+---------+
            |
            | admin subscribe
            v
   Subscription
   +------------------+
-  | name: vault      |
-  | channel: stable  |
+  | name: openshift- |
+  |  cert-manager-.. |
+  | channel:stable-v1|
   | approval: Auto   |
-  | startingCSV:     |
-  |   vault.v1.16.0  |
+  | startingCSV: opt.|
   +--------+---------+
            |
            | OLM installs
@@ -104,33 +105,33 @@ oc get catalogsource -n openshift-marketplace
 ## Subscription — Installazione Operator
 
 !!! note "Esempio illustrativo"
-    Il package `vault` / CSV `vault.v1.16.0` usato negli esempi è **fittizio** (non è un package di `redhat-operators`; l'operator `banzaicloud/vault-operator` citato nel CSV è community e non più mantenuto). Per un caso reale usare `oc get packagemanifest -n openshift-marketplace` e scegliere un package esistente (es. `openshift-cert-manager-operator`, channel `stable-v1`). <!-- REVIEW: sostituire gli esempi vault con un operator reale supportato -->
+    Gli esempi usano il package reale `openshift-cert-manager-operator` (catalog `redhat-operators`, channel `stable-v1`, installazione tipica in `cert-manager-operator`). Le versioni CSV (`1.X.Y`) sono segnaposto: ricavare quelle reali con `oc get packagemanifest openshift-cert-manager-operator -n openshift-marketplace -o jsonpath='{.status.channels[*].currentCSV}'`.
 
 ```yaml
 # Installa un operator con approval manuale (produzione)
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: vault-operator
-  namespace: vault-system           # namespace dove installare
+  name: openshift-cert-manager-operator
+  namespace: cert-manager-operator  # namespace dove installare
 spec:
-  channel: stable
-  name: vault                       # nome del package nel catalog
+  channel: stable-v1
+  name: openshift-cert-manager-operator  # nome del package nel catalog
   source: redhat-operators
   sourceNamespace: openshift-marketplace
   installPlanApproval: Manual       # Manual | Automatic
-  startingCSV: vault.v1.16.0       # opzionale: versione specifica
+  startingCSV: cert-manager-operator.v1.X.Y  # opzionale: versione specifica
 
 ---
 # OperatorGroup — definisce il targeting namespace
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  name: vault-og
-  namespace: vault-system
+  name: cert-manager-operator-og
+  namespace: cert-manager-operator
 spec:
   targetNamespaces:
-    - vault-system                  # single namespace
+    - cert-manager-operator                  # single namespace
   # Per installazione cluster-wide (omit targetNamespaces):
   # spec: {}
 ```
@@ -139,31 +140,31 @@ spec:
 # Workflow installazione manuale
 
 # 1. Crea namespace e OperatorGroup
-oc new-project vault-system
+oc new-project cert-manager-operator
 oc apply -f operator-group.yaml
 
 # 2. Crea Subscription
 oc apply -f subscription.yaml
 
 # 3. Approvazione manuale dell'InstallPlan
-oc get installplan -n vault-system
-# NAME            CSV                    APPROVAL   APPROVED
-# install-abc123  vault.v1.16.0          Manual     false
+oc get installplan -n cert-manager-operator
+# NAME            CSV                               APPROVAL   APPROVED
+# install-abc123  cert-manager-operator.v1.X.Y      Manual     false
 
 # Approva l'installazione (review prima!)
 oc patch installplan install-abc123 \
     --type merge \
     -p '{"spec":{"approved":true}}' \
-    -n vault-system
+    -n cert-manager-operator
 # Nota: senza OperatorGroup nel namespace la CSV resta in fallimento
 # (condizione "no operator group found"): crearlo PRIMA della Subscription.
 
 # 4. Verifica installazione
-oc get csv -n vault-system
-# NAME             DISPLAY         VERSION   PHASE
-# vault.v1.16.0    HashiCorp Vault  1.16.0   Succeeded
+oc get csv -n cert-manager-operator
+# NAME                           DISPLAY                                       VERSION   PHASE
+# cert-manager-operator.v1.X.Y   cert-manager Operator for Red Hat OpenShift   1.X.Y     Succeeded
 
-oc get pods -n vault-system
+oc get pods -n cert-manager-operator
 ```
 
 ---
@@ -177,62 +178,62 @@ Il **CSV** è il manifesto che descrive tutto ciò che un Operator installa e ge
 apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
-  name: vault.v1.16.0
-  namespace: vault-system
+  name: cert-manager-operator.v1.X.Y
+  namespace: cert-manager-operator
   annotations:
     operators.openshift.io/valid-subscription: '["OpenShift Platform Plus"]'
 spec:
-  displayName: HashiCorp Vault
-  version: 1.16.0
-  replaces: vault.v1.15.3    # upgrade path: questa versione sostituisce la precedente
-  # alternativa: olm.skipRange (annotation) per saltare versioni intermedie, es. ">=1.14.0 <1.16.0"
+  displayName: cert-manager Operator for Red Hat OpenShift
+  version: 1.X.Y
+  replaces: cert-manager-operator.v1.X.(Y-1)    # upgrade path: questa versione sostituisce la precedente
+  # alternativa: olm.skipRange (annotation) per saltare versioni intermedie, es. ">=1.14.0 <1.X.Y"
   description: |
-    HashiCorp Vault secures, stores, and tightly controls access to tokens,
-    passwords, certificates, API keys...
+    Gestisce il rilascio e il rinnovo di certificati X.509 nel cluster
+    (Issuer, ClusterIssuer, Certificate).
 
   # CRDs gestite da questo operator
   customresourcedefinitions:
     owned:
-      - name: vaultservers.vault.banzaicloud.com
-        version: v1alpha1
-        kind: VaultServer
-        description: "Represents a Vault server cluster"
-      - name: vaultauthengines.vault.banzaicloud.com
-        version: v1alpha1
-        kind: VaultAuthEngine
+      - name: certificates.cert-manager.io
+        version: v1
+        kind: Certificate
+        description: "Richiesta di certificato gestita da cert-manager"
+      - name: clusterissuers.cert-manager.io
+        version: v1
+        kind: ClusterIssuer
 
   # RBAC richiesto dall'operator
   install:
     strategy: deployment
     spec:
       permissions:    # namespace-scoped
-        - serviceAccountName: vault-operator
+        - serviceAccountName: cert-manager-operator-sa
           rules:
             - apiGroups: [""]
               resources: [secrets, configmaps, pods]
               verbs: [get, list, watch, create, update, patch, delete]
       clusterPermissions:    # cluster-scoped
-        - serviceAccountName: vault-operator
+        - serviceAccountName: cert-manager-operator-sa
           rules:
-            - apiGroups: [vault.banzaicloud.com]
+            - apiGroups: [cert-manager.io]
               resources: ["*"]
               verbs: ["*"]
 
       deployments:
-        - name: vault-operator
+        - name: cert-manager-operator
           spec:
             replicas: 1
             selector:
               matchLabels:
-                app: vault-operator
+                app: cert-manager-operator
             template:
               metadata:
                 labels:
-                  app: vault-operator
+                  app: cert-manager-operator
               spec:
                 containers:
-                  - name: vault-operator
-                    image: banzaicloud/vault-operator:1.16.0
+                  - name: cert-manager-operator
+                    image: registry.redhat.io/cert-manager/cert-manager-operator-rhel9:v1.X.Y  # esempio illustrativo
 ```
 
 ---
@@ -249,29 +250,29 @@ spec:
 # → Admin approva esplicitamente
 
 # Controlla upgrade disponibili
-oc get subscription vault-operator -n vault-system -o yaml | grep -A5 installedCSV
-# installedCSV: vault.v1.15.3   ← versione corrente
+oc get subscription openshift-cert-manager-operator -n cert-manager-operator -o yaml | grep -A5 installedCSV
+# installedCSV: cert-manager-operator.v1.X.(Y-1)   ← versione corrente
 
 # OLM crea un InstallPlan per l'upgrade
-oc get installplan -n vault-system
-# NAME            CSV                APPROVAL   APPROVED
-# upgrade-xyz789  vault.v1.16.0     Manual     false   ← upgrade disponibile
+oc get installplan -n cert-manager-operator
+# NAME            CSV                            APPROVAL   APPROVED
+# upgrade-xyz789  cert-manager-operator.v1.X.Y   Manual     false   ← upgrade disponibile
 
 # Review del CSV prima di approvare
-oc get csv vault.v1.16.0 -n vault-system -o yaml | grep -A20 'spec.description'
+oc get csv cert-manager-operator.v1.X.Y -n cert-manager-operator -o yaml | grep -A20 'spec.description'
 
 # Approva upgrade
 oc patch installplan upgrade-xyz789 \
     --type merge \
     -p '{"spec":{"approved":true}}' \
-    -n vault-system
+    -n cert-manager-operator
 ```
 
 ---
 
 ## OLM v1 — Operator Controller (ClusterExtension)
 
-OLM "classico" (v0, descritto sopra) rimane il default per gli Operator su OpenShift, ma da OpenShift 4.18 è GA **OLM v1**, riscrittura basata su due componenti: **catalogd** (serve i contenuti dei catalog come `ClusterCatalog`) e **operator-controller** (installa/aggiorna estensioni tramite `ClusterExtension`). <!-- REVIEW: verificare stato GA, bundle format supportati (registry+v1) e limiti (es. solo installMode AllNamespaces, niente webhook) alla versione OCP target -->
+OLM "classico" (v0, descritto sopra) rimane il default per gli Operator su OpenShift, ma da OpenShift 4.18 è GA **OLM v1**, riscrittura basata su due componenti: **catalogd** (serve i contenuti dei catalog come `ClusterCatalog`) e **operator-controller** (installa/aggiorna estensioni tramite `ClusterExtension`).
 
 | Aspetto | OLM v0 (classico) | OLM v1 |
 |---|---|---|
@@ -297,7 +298,7 @@ spec:
       channels: [stable-v1]
 ```
 
-Perché esiste: v0 concentra privilegi enormi in OLM (un bundle può creare RBAC arbitrario) e il modello `OperatorGroup` è fragile; v1 rende espliciti permessi e scope. Per i bundle che richiedono `OwnNamespace`/`SingleNamespace` o webhook, verificare la compatibilità prima di migrare.
+Perché esiste: v0 concentra privilegi enormi in OLM (un bundle può creare RBAC arbitrario) e il modello `OperatorGroup` è fragile; v1 rende espliciti permessi e scope. Limiti verificati su OCP 4.20: l'estensione deve usare il bundle format `registry+v1`, supportare l'install mode `AllNamespaces` e non usare webhook; non sono supportate dipendenze dichiarate via `olm.gvk.required`/`olm.package.required`/`olm.constraint`. `SingleNamespace`/`OwnNamespace` e webhook sono solo Technology Preview in 4.20. Le procedure documentate sono solo CLI (la console non mostra ancora le risorse OLM v1). Se il vincolo non è soddisfatto, l'errore compare nelle condition della `ClusterExtension`.
 
 ---
 
@@ -306,7 +307,7 @@ Perché esiste: v0 concentra privilegi enormi in OLM (un bundle può creare RBAC
 In ambienti air-gapped o disconnected, il catalog deve essere specchiato localmente.
 
 !!! warning "oc-mirror v1 deprecato"
-    Il plugin `oc-mirror` v1 (`apiVersion: mirror.openshift.io/v1alpha2`, `storageConfig`, directory `oc-mirror-workspace/`) è deprecato da OpenShift 4.18 in favore di **oc-mirror v2** (`--v2`, `apiVersion: mirror.openshift.io/v2alpha1`). v2 non usa più `storageConfig` (niente metadata nel registry): lo stato è in una *workspace* locale. <!-- REVIEW: verificare flag --v2 / default di oc-mirror v2 sulla versione OCP target e rimozione effettiva di v1 -->
+    Il plugin `oc-mirror` v1 (`apiVersion: mirror.openshift.io/v1alpha2`, `storageConfig`, directory `oc-mirror-workspace/`) è deprecato da OpenShift 4.18 in favore di **oc-mirror v2** (`--v2`, `apiVersion: mirror.openshift.io/v2alpha1`). v2 non usa più `storageConfig` (niente metadata nel registry): lo stato è in una *workspace* locale. Verificato su 4.20/4.21: senza flag viene ancora eseguito v1 (il default passerà a v2 in una release futura), quindi specificare sempre `--v2` (o `--v1` per restare sul vecchio plugin); v1 non è ancora rimosso.
 
 ```bash
 # imageset-config.yaml (oc-mirror v2)
