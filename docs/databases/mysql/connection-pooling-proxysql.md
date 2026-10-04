@@ -7,9 +7,10 @@ search_keywords: [proxysql, connection pooling mysql, mysql proxy, query routing
 parent: databases/mysql/_index
 related: [databases/postgresql/connection-pooling, databases/mysql/architettura-replicazione, databases/kubernetes-cloud/managed-databases]
 official_docs: https://proxysql.com/documentation/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Connection Pooling e Proxy — ProxySQL
@@ -21,16 +22,16 @@ MySQL usa un modello **thread-per-connection**: ogni connessione client ottiene 
 **ProxySQL** è un livello di proxy/pooling che si inserisce tra applicazione e MySQL: espone un endpoint MySQL-compatibile, multiplexa le connessioni client su un pool ridotto di connessioni server, instrada le query (read/write split, sharding logico) e assorbe il failover del primary. A differenza di PgBouncer — che fa solo pooling — ProxySQL è anche un router L7 con query cache e rewrite integrati, pagando in cambio una configurazione più complessa (tabelle SQL invece di un file `.ini`).
 
 !!! warning "ProxySQL non sostituisce da solo l'alta disponibilità"
-    ProxySQL instrada il traffico verso il primary corretto, ma **non decide** chi è il primary: serve un meccanismo esterno di failover (Orchestrator, MySQL Group Replication, Galera) che aggiorna gli hostgroup di ProxySQL. Senza questa integrazione, un failover manuale lascia ProxySQL a instradare scritture verso un nodo ormai read-only.
+    ProxySQL instrada il traffico verso il primary corretto, ma **non promuove** un nuovo primary: serve un meccanismo di failover (Orchestrator, MySQL Group Replication, Galera) che elegge il nodo. ProxySQL si limita a *osservare* il risultato — tramite il flag `read_only` (replica asincrona, `mysql_replication_hostgroups`) o lo stato del gruppo (Group Replication/Galera) — e a spostare i nodi tra hostgroup. Se l'osservazione non è configurata, un failover lascia ProxySQL a instradare scritture verso un nodo ormai read-only.
 
 ## Concetti Chiave
 
 - **Hostgroup**: raggruppamento logico di server MySQL con lo stesso ruolo (es. writer hostgroup `10`, reader hostgroup `20`). Le query rule instradano verso un hostgroup, non verso un singolo host.
 - **Connection multiplexing**: come PgBouncer in transaction mode, ProxySQL può riassegnare una connessione server a un client diverso tra una query e l'altra, riducendo drasticamente il numero di connessioni reali verso MySQL.
 - **Query routing basato su regex**: le `mysql_query_rules` instradano in base a pattern SQL (es. tutte le `SELECT` → reader hostgroup, tutto il resto → writer hostgroup), non sulla sintassi esplicita dell'applicazione.
-- **Fast-forward vs multiplexing**: alcune sessioni (uso di `LOCK TABLES`, variabili di sessione non standard, transazioni esplicite lunghe) forzano ProxySQL in modalità "fast-forward", che disabilita temporaneamente il multiplexing per quella connessione — va monitorato perché riduce l'efficienza del pool.
+- **Multiplexing disabilitato (connessione "pinned")**: alcune sessioni (transazioni aperte, `LOCK TABLES`, `GET_LOCK()`, tabelle temporanee, certe variabili di sessione) costringono ProxySQL a legare la connessione server a quel client finché lo stato non finisce — il pool perde efficienza. Si monitora con `Client_Connections_*` e `Server_Connections_*` in `stats_mysql_global` e con `stats_mysql_processlist`. Da non confondere con `fast_forward=1` su `mysql_users`, che è una scelta esplicita: l'utente bypassa del tutto query rules, cache e multiplexing (proxy TCP trasparente).
 - **Query cache integrata**: ProxySQL può cachare risultati di `SELECT` in memoria con TTL configurabile per query rule, riducendo il carico sul backend per query identiche e frequenti (dashboard, lookup di configurazione).
-- **Admin interface**: ProxySQL si configura via SQL su una porta separata (6032 di default) — le modifiche restano in staging (`_runtime` vs tabelle persistite) finché non vengono promosse con `LOAD ... TO RUNTIME` e salvate con `SAVE ... TO DISK`.
+- **Admin interface**: ProxySQL si configura via SQL su una porta separata (6032 di default) — la configurazione ha tre livelli: **MEMORY** (le tabelle che si modificano con `INSERT`/`UPDATE`), **RUNTIME** (ciò che il proxy applica davvero, tabelle `runtime_*`) e **DISK** (SQLite persistito). Le modifiche diventano attive con `LOAD ... TO RUNTIME` e sopravvivono al riavvio solo dopo `SAVE ... TO DISK`. Le credenziali di default `admin:admin` funzionano solo da localhost e vanno cambiate (`admin-admin_credentials`).
 
 ### Perché Serve un Pooler — Memoria per Thread vs Buffer Pool
 
@@ -47,7 +48,7 @@ max_connections = 2000   # valore comune ma pericoloso senza pooler
 # → OOM killer, swapping, o MySQL che rifiuta nuove connessioni
 ```
 
-Con ProxySQL davanti, l'applicazione può aprire quante connessioni vuole verso il proxy (leggere, ~pochi KB l'una); solo un pool ridotto e dimensionato (es. 50-100) raggiunge davvero MySQL.
+Con ProxySQL davanti, l'applicazione può aprire molte più connessioni verso il proxy (gestite da poche thread di rete con I/O asincrono, senza buffer di sort/join per connessione); solo un pool ridotto e dimensionato (es. 50-100) raggiunge davvero MySQL.
 
 ## Architettura / Come Funziona
 
@@ -68,9 +69,15 @@ Le `SELECT` vengono instradate di default sull'hostgroup reader (20); `INSERT`/`
 
 ProxySQL non elegge un primary da solo. Si integra con:
 
-- **Orchestrator**: monitora la topologia di replicazione, promuove un nuovo primary in caso di failure, e tramite hook (`post-failover`) aggiorna la tabella `mysql_servers` di ProxySQL spostando l'hostgroup writer sul nuovo nodo.
-- **MySQL Group Replication / InnoDB Cluster**: ProxySQL ha supporto nativo per leggere lo stato del gruppo da `performance_schema.replication_group_members` e aggiornare automaticamente quale nodo è `ONLINE`/primary, senza script esterni.
-- **Galera Cluster**: ProxySQL può fare galera-aware health check nativo (`mysql-galera_hostgroups`), instradando scritture verso un solo nodo alla volta per evitare conflitti di certificazione multi-master.
+- **Replica asincrona + `mysql_replication_hostgroups`**: il monitor di ProxySQL interroga periodicamente `read_only` su ogni backend; il nodo con `read_only=0` va nel writer hostgroup, quelli con `read_only=1` nel reader hostgroup. Quindi dopo una promozione (manuale o via Orchestrator) basta che il nuovo primary abbia `read_only=0` e il vecchio `read_only=1`: ProxySQL sposta i nodi da solo entro `mysql-monitor_read_only_interval`. Serve un utente di monitoring sul backend (`mysql-monitor_username`/`mysql-monitor_password`).
+- **Orchestrator**: monitora la topologia, promuove un nuovo primary in caso di failure e (hook `PostFailoverProcesses`) può aggiornare `mysql_servers` di ProxySQL, utile per ridurre la finestra rispetto al polling di `read_only`.
+- **MySQL Group Replication / InnoDB Cluster**: ProxySQL ha supporto nativo (`mysql_group_replication_hostgroups`): il monitor legge lo stato del nodo dalla vista `sys.gr_member_routing_candidate_status` (da installare sul backend con lo script `addition_to_sys` fornito da ProxySQL per MySQL < 8.0.x; l'utente di monitoring deve avere `SELECT` su di essa) e aggiorna writer/reader automaticamente, senza script esterni.
+- **Galera / Percona XtraDB Cluster**: health check nativo tramite la tabella `mysql_galera_hostgroups`, che instrada scritture verso un solo nodo alla volta per evitare conflitti di certificazione multi-master.
+
+<!-- REVIEW: verificare se la vista sys.gr_member_routing_candidate_status richieda ancora lo script addition_to_sys su MySQL 8.4 (bullet Group Replication sopra) -->
+
+
+Tutti i meccanismi funzionano solo se i server sono già inseriti in `mysql_servers` (con l'hostgroup iniziale scelto): ProxySQL li riassegna agli hostgroup definiti nella tabella di integrazione.
 
 !!! tip "Group Replication è l'integrazione più semplice da operare"
     Se si parte da zero su un nuovo stack MySQL in alta disponibilità, l'integrazione nativa ProxySQL + Group Replication richiede meno componenti esterni (nessun Orchestrator separato) rispetto a replica asincrona classica + Orchestrator.
@@ -95,8 +102,9 @@ SAVE MYSQL SERVERS TO DISK;
 ```
 
 ```sql
--- Credenziali applicative — ProxySQL autentica i client e poi
--- usa le proprie credenziali verso il backend (non devono coincidere)
+-- Credenziali applicative — ProxySQL autentica i client con queste credenziali
+-- e le riusa per aprire le connessioni verso il backend: lo stesso utente/password
+-- DEVE esistere anche su MySQL (oltre all'utente di monitoring, mysql-monitor_username)
 INSERT INTO mysql_users (username, password, default_hostgroup, transaction_persistent)
 VALUES ('app_user', 'StrongPasswordHash', 10, 1);
 -- transaction_persistent=1: mantieni la connessione sullo stesso hostgroup
@@ -109,17 +117,23 @@ SAVE MYSQL USERS TO DISK;
 ### Query Rules — Read/Write Split
 
 ```sql
--- Regola 1: tutte le SELECT (tranne FOR UPDATE) vanno al reader hostgroup
-INSERT INTO mysql_query_rules (rule_id, active, match_pattern, destination_hostgroup, apply)
-VALUES (100, 1, '^SELECT.*(?<!FOR UPDATE)$', 20, 1);
+-- Le regole sono valutate per rule_id crescente: la prima che matcha con apply=1 vince.
+-- Quelle specifiche devono quindi avere rule_id più basso di quelle generiche.
+
+-- Regola 1 (cache + reader): query cache per una lookup table a bassa variazione.
+-- Con apply=1 il processing si ferma qui, quindi destination_hostgroup va indicato
+-- anche qui: altrimenti la query finirebbe sul default_hostgroup dell'utente (writer).
+INSERT INTO mysql_query_rules (rule_id, active, match_pattern, destination_hostgroup, cache_ttl, apply)
+VALUES (80, 1, '^SELECT \* FROM configurazioni', 20, 30000, 1);  -- TTL 30s in ms
 
 -- Regola 2: SELECT ... FOR UPDATE deve andare al writer (coerenza transazionale)
 INSERT INTO mysql_query_rules (rule_id, active, match_pattern, destination_hostgroup, apply)
-VALUES (90, 1, '^SELECT.*FOR UPDATE$', 10, 1);
+VALUES (90, 1, '^SELECT .* FOR UPDATE', 10, 1);
 
--- Regola 3 (opzionale): query cache per una lookup table a bassa variazione
-INSERT INTO mysql_query_rules (rule_id, active, match_pattern, cache_ttl, apply)
-VALUES (80, 1, '^SELECT \\* FROM configurazioni', 30000, 1);  -- TTL 30s in ms
+-- Regola 3: tutte le altre SELECT vanno al reader hostgroup
+-- (FOR UPDATE è già stata intercettata dalla regola 90)
+INSERT INTO mysql_query_rules (rule_id, active, match_pattern, destination_hostgroup, apply)
+VALUES (100, 1, '^SELECT', 20, 1);
 
 LOAD MYSQL QUERY RULES TO RUNTIME;
 SAVE MYSQL QUERY RULES TO DISK;
@@ -135,8 +149,8 @@ ORDER BY hits DESC;
 ### Integrazione con Group Replication (failover-aware)
 
 ```sql
--- ProxySQL interroga periodicamente performance_schema.replication_group_members
--- sui nodi del gruppo per determinare automaticamente writer/reader
+-- I nodi del gruppo vanno prima inseriti in mysql_servers (es. hostgroup 10 o 20);
+-- ProxySQL ne interroga periodicamente lo stato e li sposta tra writer/reader
 INSERT INTO mysql_group_replication_hostgroups
   (writer_hostgroup, backup_writer_hostgroup, reader_hostgroup, offline_hostgroup,
    active, max_writers, writer_is_also_reader, max_transactions_behind)
@@ -150,16 +164,15 @@ SAVE MYSQL SERVERS TO DISK;
 
 ### Docker Compose
 
+<!-- REVIEW: verificare ultima release stabile ProxySQL (2.7.x vs linea 3.x) e aggiornare i tag immagine qui e nel Deployment K8s -->
 ```yaml
 proxysql:
-  image: proxysql/proxysql:2.6.0
+  image: proxysql/proxysql:2.7.3   # pinnare sempre una versione
   volumes:
-    - ./proxysql.cnf:/etc/proxysql.cnf:ro
+    - ./proxysql.cnf:/etc/proxysql.cnf:ro   # admin_credentials, monitor user e server iniziali qui
   ports:
     - "6033:6033"   # porta dati (traffico applicativo)
-    - "6032:6032"   # porta admin
-  environment:
-    PROXYSQL_ADMIN_PASSWORD: ${PROXYSQL_ADMIN_PASSWORD}
+    - "6032:6032"   # porta admin (non esporre fuori dalla rete di gestione)
 ```
 
 ### Deployment su Kubernetes — HA del Proxy
@@ -182,7 +195,7 @@ spec:
     spec:
       containers:
       - name: proxysql
-        image: proxysql/proxysql:2.6.0
+        image: proxysql/proxysql:2.7.3
         ports:
         - containerPort: 6033
         - containerPort: 6032
@@ -212,8 +225,12 @@ spec:
 ```
 
 ```sql
--- ProxySQL Cluster — le repliche si sincronizzano tra loro via protocollo nativo,
--- eliminando la necessità di un meccanismo esterno (es. keepalived + VIP)
+-- ProxySQL Cluster — le repliche si sincronizzano la configurazione (mysql_servers,
+-- mysql_users, mysql_query_rules...) via protocollo nativo sulla porta admin.
+-- NON bilancia il traffico client: per quello servono il Service K8s o un LB.
+-- Richiede anche admin-cluster_username/admin-cluster_password (uguali sui nodi)
+-- e hostname stabili: con un Deployment i pod hanno nomi casuali, quindi per il
+-- cluster usare uno StatefulSet + headless Service (proxysql-0.proxysql-headless...).
 INSERT INTO proxysql_servers (hostname, port, comment)
 VALUES ('proxysql-1.internal', 6032, 'nodo 1'),
        ('proxysql-2.internal', 6032, 'nodo 2'),
@@ -231,7 +248,7 @@ SAVE PROXYSQL SERVERS TO DISK;
 - **Dimensionare `max_connections` per hostgroup, non globalmente**: ogni server in `mysql_servers` ha il proprio `max_connections` — un reader più debole deve avere un limite più basso del writer, non lo stesso valore copiato per tutti.
 - **`transaction_persistent=1` per utenti che mischiano SELECT e scritture nella stessa transazione**: senza questo flag, ProxySQL può instradare una `SELECT` dentro una transazione aperta verso il reader hostgroup, rompendo la coerenza read-your-writes.
 - **Non abilitare la query cache su tabelle con scritture frequenti**: il TTL fisso di ProxySQL non invalida automaticamente alla scrittura (a differenza della vecchia MySQL query cache, rimossa in 8.0) — va usata solo su dati quasi statici.
-- **ProxySQL Cluster nativo da v2 invece di keepalived+VIP**: riduce i componenti esterni da mantenere e sincronizza automaticamente `mysql_servers`/`mysql_query_rules` tra le repliche del proxy.
+- **ProxySQL Cluster per la sincronizzazione della config** tra repliche del proxy (`mysql_servers`, `mysql_query_rules`, `mysql_users`): evita di applicare a mano ogni modifica su N nodi. Il bilanciamento dei client resta compito di Service K8s/LB (o keepalived+VIP su VM): Cluster non lo sostituisce.
 - **Promuovere sempre `RUNTIME` poi `DISK`**: una modifica solo `LOAD ... TO RUNTIME` senza `SAVE ... TO DISK` si perde al riavvio del processo ProxySQL — comune causa di configurazioni "sparite" dopo un redeploy.
 - **Monitorare `Questions`/`Com_*` su `stats_mysql_global` per capire il mix di query reale**, non solo i log applicativi — spesso la query mix reale differisce da quanto assunto nelle regole di routing.
 
@@ -241,15 +258,18 @@ SAVE PROXYSQL SERVERS TO DISK;
 
 **Sintomo:** Al riavvio di ProxySQL (o di un deployment Kubernetes con rolling restart), MySQL riceve un picco improvviso di migliaia di tentativi di connessione simultanei, con errori `Too many connections` lato backend.
 
-**Causa:** Tutte le connessioni client riconnettono contemporaneamente a un ProxySQL "freddo" senza pool pre-aperto, e ProxySQL a sua volta apre nuove connessioni server tutte insieme invece di gradualmente.
+**Causa:** Tutte le connessioni client riconnettono contemporaneamente a un ProxySQL "freddo" senza pool pre-aperto, e ProxySQL a sua volta apre nuove connessioni server tutte insieme invece di gradualmente. Se `mysql_servers.max_connections` (default 1000) è più alto del `max_connections` di MySQL, il tetto di ProxySQL non protegge il backend.
 
-**Soluzione:**
+**Soluzione:** il tetto per backend va tenuto *sotto* il `max_connections` di MySQL; le richieste in eccesso restano in coda nel proxy (fino a `mysql-connect_timeout_server_max`) invece di raggiungere MySQL. Il rollout dei pod proxy va scaglionato (`maxUnavailable: 1`, `PodDisruptionBudget`).
 ```sql
--- Limitare quante nuove connessioni server ProxySQL puo' aprire al secondo per hostgroup
+-- Tetto di connessioni server per il writer (inferiore a max_connections di MySQL)
 UPDATE mysql_servers SET max_connections = 150 WHERE hostgroup_id = 10;
+LOAD MYSQL SERVERS TO RUNTIME;
 
--- Verificare il throttling di connessione lato globale variables
-SELECT * FROM global_variables WHERE variable_name LIKE 'mysql-max_connections%';
+-- Pre-aprire connessioni al backend all'avvio del proxy (connection warming)
+-- e verificare i limiti lato frontend
+SELECT variable_name, variable_value FROM global_variables
+WHERE variable_name IN ('mysql-connection_warming', 'mysql-free_connections_pct', 'mysql-max_connections');
 
 -- Aumentare temporaneamente max_connections lato MySQL durante i rolling restart
 -- pianificati, poi riportarlo al valore normale
@@ -272,14 +292,20 @@ FROM stats_mysql_query_rules
 WHERE hits > 0
 ORDER BY rule_id;
 
+-- Hostgroup effettivo per ogni query normalizzata (digest)
+SELECT hostgroup, digest_text, count_star FROM stats_mysql_query_digest
+ORDER BY count_star DESC LIMIT 20;
+
 -- Tracciare in tempo reale le query e il loro hostgroup di destinazione
 SET mysql-eventslog_filename='queries.log';
 SET mysql-eventslog_format=2;
 LOAD MYSQL VARIABLES TO RUNTIME;
 -- poi ispezionare il log eventi per vedere hostgroup assegnato per query
 
--- Correggere l'ordine o la specificità della regex, poi ricaricare
-UPDATE mysql_query_rules SET rule_id = 85 WHERE rule_id = 100;  -- es. riordino priorità
+-- Correggere ordine o specificità: la regola generica deve avere rule_id PIÙ ALTO
+-- di quelle specifiche (es. spostare la catch-all dopo la FOR UPDATE)
+-- (es. una catch-all con rule_id 50 che intercetta tutto: spostarla a 200)
+UPDATE mysql_query_rules SET rule_id = 200 WHERE rule_id = 50;
 LOAD MYSQL QUERY RULES TO RUNTIME;
 ```
 
@@ -317,7 +343,7 @@ SAVE MYSQL SERVERS TO DISK;
 
 **Sintomo:** Tutto il traffico sembra passare, ma nessuna query rule mostra `hits > 0`; le query finiscono tutte sull'hostgroup di default indipendentemente dalle regole configurate.
 
-**Causa:** Le regole sono state inserite nella tabella di configurazione ma mai promosse a runtime (`LOAD MYSQL QUERY RULES TO RUNTIME` mancante), oppure l'utente applicativo ha un `default_hostgroup` che bypassa le regole perché `apply=0` su tutte.
+**Causa:** Le regole sono state inserite nella tabella di configurazione ma mai promosse a runtime (`LOAD MYSQL QUERY RULES TO RUNTIME` mancante), oppure l'utente applicativo ha `fast_forward=1` (bypassa del tutto le query rules), oppure nessun `match_pattern` corrisponde (es. regex con escape errati) e il traffico cade sul `default_hostgroup` dell'utente.
 
 **Soluzione:**
 ```sql
@@ -331,9 +357,8 @@ SELECT rule_id, active, apply FROM runtime_mysql_query_rules;
 LOAD MYSQL QUERY RULES TO RUNTIME;
 SAVE MYSQL QUERY RULES TO DISK;
 
--- Verificare anche che l'utente non abbia un default_hostgroup che
--- scavalchi il routing previsto per via di regole con apply=0 troppo in alto in ordine
-SELECT username, default_hostgroup FROM mysql_users;
+-- Verificare che l'utente non abbia fast_forward=1 e quale sia il suo hostgroup di default
+SELECT username, default_hostgroup, fast_forward FROM mysql_users;
 ```
 
 ## Relazioni
