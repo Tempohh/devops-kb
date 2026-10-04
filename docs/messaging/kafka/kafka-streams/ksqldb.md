@@ -7,9 +7,10 @@ search_keywords: [ksqldb, ksql, kafka sql, stream sql, sql su kafka, push query,
 parent: messaging/kafka/kafka-streams
 related: [messaging/kafka/kafka-streams/topologie, messaging/kafka/kafka-streams/windowing]
 official_docs: https://ksqldb.io/
-status: complete
+status: needs-review
 difficulty: intermediate
-last_updated: 2026-02-23
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # ksqlDB
@@ -55,8 +56,13 @@ SELECT * FROM orders_by_customer
 WHERE customerId = 'cust-789';
 ```
 
-!!! warning "Pull query richiedono Materialized View"
-    Le pull query funzionano solo su TABLE o MATERIALIZED VIEW, non su STREAM. Tentare una pull query su uno stream restituisce un errore.
+<!-- REVIEW: verificare su docs.ksqldb.io quali pull query sono supportate nelle versioni recenti (pull query su STREAM e table scan senza filtro sulla chiave introdotti dopo 0.22) -->
+!!! warning "Pull query: il caso d'uso tipico è la Materialized View"
+    Il caso d'uso classico delle pull query è la lettura puntuale per chiave su una TABLE / MATERIALIZED VIEW (lookup su state store). Le versioni più vecchie rifiutavano le pull query su STREAM; le versioni recenti ampliano il supporto (stream e table scan), ma senza filtro sulla chiave il costo è una scansione completa: verificare i limiti della versione in uso.
+
+!!! warning "Stato del progetto (2026)"
+    ksqlDB è sotto Confluent Community License (non open source OSI) e lo sviluppo è rallentato: per nuovi progetti Confluent spinge verso Flink SQL (Confluent Cloud for Apache Flink). Valutare questa traiettoria prima di adottarlo per workload nuovi. <!-- REVIEW: verificare roadmap/stato di ksqlDB e impatto dell'acquisizione Confluent-IBM -->
+
 
 ## Come Funziona / Architettura
 
@@ -101,8 +107,10 @@ ksqlDB Server è un'applicazione Java che:
 
 ### Docker Compose per avviare ksqlDB
 
+!!! note "ZooKeeper"
+    L'esempio usa ZooKeeper per semplicità; Kafka 4.0+ funziona solo in modalità KRaft, quindi con broker recenti sostituire `zookeeper` con un broker KRaft (vedi [ZooKeeper vs KRaft](../fondamenti/zookeeper-kraft.md)). <!-- REVIEW: verificare tag immagini cp-* correnti (7.6.0 è vecchio) -->
+
 ```yaml
-version: '3.8'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.0
@@ -290,7 +298,7 @@ FROM orders_per_customer
 WHERE customerId = 'cust-789';
 
 -- Recupera il totale orario per un cliente
-SELECT customerId, hourlyTotal, FROM_UNIXTIME(windowStart / 1000) AS window
+SELECT customerId, hourlyTotal, FROM_UNIXTIME(windowStart) AS window
 FROM hourly_order_totals
 WHERE customerId = 'cust-789';
 ```
@@ -308,9 +316,9 @@ curl -X POST http://localhost:8088/ksql \
     }
   }'
 
-# Push query via REST (streaming response)
-curl -X POST http://localhost:8088/query-stream \
-  -H "Content-Type: application/vnd.ksql.v1+json" \
+# Push query via REST (streaming response; /query-stream richiede HTTP/2)
+curl --http2 -X POST http://localhost:8088/query-stream \
+  -H "Content-Type: application/vnd.ksqlapi.delimited.v1" \
   -d '{
     "sql": "SELECT * FROM orders_stream EMIT CHANGES;",
     "properties": {
@@ -344,7 +352,7 @@ curl -X POST http://localhost:8088/query \
 ## Best Practices
 
 - **Usa `EMIT FINAL`** invece di `EMIT CHANGES` per le aggregazioni con windowing: riduce il numero di messaggi di output emettendo solo il risultato finale della finestra.
-- **Definisci sempre la `PRIMARY KEY`** nelle TABLE: senza di essa, ksqlDB non può fare pull query su quella tabella.
+- **Dichiara la `PRIMARY KEY`** nelle `CREATE TABLE` su topic: è obbligatoria e identifica la chiave di upsert/lookup usata dalle pull query. Nelle tabelle derivate da aggregazione la chiave è la colonna di `GROUP BY`.
 - **Scala ksqlDB orizzontalmente** avviando più istanze dello stesso server: le query vengono distribuite automaticamente tramite Kafka consumer group.
 - **Usa User Defined Functions (UDF)** per logiche custom non esprimibili in SQL:
 
@@ -371,14 +379,10 @@ public class MaskEmailUdf {
 **Causa:** L'offset reset è impostato su `latest` (default) e non ci sono nuovi messaggi.
 **Soluzione:** `SET 'auto.offset.reset' = 'earliest';` prima di eseguire la query.
 
-### Errore: Table must have a primary key
+### Errore: CREATE TABLE senza PRIMARY KEY
 
-```
-Statement is invalid because it requires a TABLE that has a primary key
-```
-
-**Causa:** Si sta tentando una pull query su uno STREAM o una TABLE senza PRIMARY KEY.
-**Soluzione:** Ridefinire la TABLE con `PRIMARY KEY` sul campo chiave.
+**Causa:** `CREATE TABLE` su un topic senza `PRIMARY KEY` nello schema viene rifiutata (una TABLE è per definizione stato per chiave).
+**Soluzione:** Dichiarare `PRIMARY KEY` sul campo chiave del messaggio.
 
 ### Consumer lag crescente
 
@@ -391,8 +395,13 @@ Statement is invalid because it requires a TABLE that has a primary key
 For stream-table joins, the input records for the table must be co-partitioned with the stream
 ```
 
-**Causa:** Stream e Table hanno un numero diverso di partizioni.
-**Soluzione:** Assicurarsi che i topic abbiano lo stesso numero di partizioni, oppure usare GlobalKTable (`CREATE GLOBAL TABLE`).
+**Causa:** Stream e Table hanno un numero diverso di partizioni (il join è locale per partizione, quindi serve co-partitioning: stesso numero di partizioni e stessa chiave).
+**Soluzione:** Ricreare uno dei due con `CREATE ... AS SELECT ... WITH (PARTITIONS = N)` allineando le partizioni. ksqlDB non supporta GlobalKTable (nessun `CREATE GLOBAL TABLE`). <!-- REVIEW: verificare testo esatto del messaggio d'errore nella versione corrente -->
+
+### Pull query su stream/table non supportata
+
+**Causa:** In versioni vecchie le pull query erano ammesse solo su TABLE con filtro sulla chiave.
+**Soluzione:** Creare una materialized view (`CREATE TABLE ... AS SELECT ... GROUP BY`) e interrogare quella, oppure aggiornare ksqlDB.
 
 ## Riferimenti
 
