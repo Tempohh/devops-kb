@@ -7,7 +7,7 @@ search_keywords: [Azure DNS, Azure Private DNS Zone, DNS forwarding Azure, Azure
 parent: cloud/azure/networking/_index
 related: [cloud/azure/networking/vnet, cloud/azure/networking/load-balancing]
 official_docs: https://learn.microsoft.com/azure/dns/
-status: needs-review
+status: reviewed
 difficulty: intermediate
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -184,7 +184,7 @@ az dns-resolver forwarding-rule create \
 **Azure CDN** distribuisce contenuti statici tramite una rete di PoP (Point of Presence) globali per ridurre latenza: la prima richiesta va all'origin, le successive sono servite dalla cache del PoP più vicino finché il TTL non scade.
 
 !!! warning "Stato del prodotto: legacy"
-    Azure CDN from Akamai (ritirato nel 2023) e Azure CDN from Edgio/Verizon (ritirato a gennaio 2025) **non sono più disponibili**. Resta solo Azure CDN Standard from Microsoft (classic), a sua volta in dismissione a favore di **Azure Front Door Standard/Premium**, che unifica CDN, WAF e global load balancing. Per nuovi workload usare Front Door. <!-- REVIEW: verificare date esatte di retirement di Azure CDN Standard from Microsoft (classic) e fine creazione nuovi profili -->
+    Azure CDN from Akamai (ritirato nel 2023) e Azure CDN from Edgio/Verizon (ritirato a gennaio 2025) **non sono più disponibili**. Resta solo Azure CDN Standard from Microsoft (classic), a sua volta in dismissione a favore di **Azure Front Door Standard/Premium**, che unifica CDN, WAF e global load balancing. Dal 30 settembre 2025 non si possono più creare nuovi profili classic; il **ritiro è il 30 settembre 2027** (migrare prima a Front Door Standard/Premium). Dal 15 agosto 2025 i certificati Managed non sono più supportati sul classic (serve BYOC). Per nuovi workload usare Front Door.
 
     Gli esempi seguenti servono per gestire profili CDN esistenti.
 
@@ -241,7 +241,7 @@ Un attacco DDoS (Distributed Denial of Service) satura banda o risorse del targe
 | **DDoS Network Protection** (ex "Standard") | Tuning adattivo per risorsa, telemetria/alert, DDoS Rapid Response, cost protection, sconto WAF | ~$2944/mese per piano, include fino a 100 IP pubblici; un piano si associa a più VNet (anche di altre subscription dello stesso tenant) |
 | **DDoS IP Protection** | Stessa mitigazione su singolo IP pubblico, senza rapid response né cost protection | ~$199/mese per IP |
 
-<!-- REVIEW: verificare prezzi correnti su azure.microsoft.com/pricing/details/ddos-protection -->
+Prezzi verificati 2026-10-04 (USD, listino pubblico; Network Protection oltre i 100 IP: ~$30 per IP aggiuntivo). Convenienza: sotto ~15 IP pubblici conviene IP Protection, oltre conviene Network Protection.
 
 Per i workload HTTP(S) abbinare Front Door/Application Gateway con WAF (protezione L7); DDoS Protection copre L3/L4.
 
