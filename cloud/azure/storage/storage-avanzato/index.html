@@ -7592,7 +7592,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -7617,7 +7617,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24978,44 +24978,48 @@
 <h2 id="panoramica">Panoramica<a class="headerlink" href="#panoramica" title="Permanent link">&para;</a></h2>
 <p>Oltre a Blob Storage, Azure offre servizi storage specializzati per scenari specifici: condivisione file (Azure Files), block storage per VM (Managed Disks), messaggi leggeri (Queue Storage) e dati strutturati chiave-valore (Table Storage). Questo documento copre anche le funzionalità avanzate di sicurezza come storage firewall e Customer-managed Keys.</p>
 <h2 id="azure-files">Azure Files<a class="headerlink" href="#azure-files" title="Permanent link">&para;</a></h2>
-<p>Azure Files offre file share gestiti nel cloud accessibili via protocollo SMB 3.0 e NFS 4.1. Può sostituire server NAS on-premises e si monta su Windows, Linux e macOS.</p>
+<p>Azure Files offre file share gestiti nel cloud accessibili via protocollo SMB (3.x) e NFS 4.1. Può sostituire server NAS on-premises e si monta su Windows, Linux e macOS (NFS solo Linux).</p>
 <h3 id="tipi-di-file-share">Tipi di File Share<a class="headerlink" href="#tipi-di-file-share" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
 <th>Tipo</th>
 <th>Protocollo</th>
-<th>Storage</th>
-<th>IOPS Max</th>
+<th>Redundancy</th>
+<th>IOPS Max (per share)</th>
 <th>Use Case</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><strong>Standard</strong> (HDD)</td>
-<td>SMB, NFS</td>
-<td>LRS/GRS/ZRS</td>
-<td>10.000</td>
+<td>solo SMB (e REST)</td>
+<td>LRS/ZRS/GRS/GZRS</td>
+<td>~20.000</td>
 <td>Home directory, dev/test, archivi</td>
 </tr>
 <tr>
-<td><strong>Premium</strong> (SSD)</td>
+<td><strong>Premium</strong> (SSD, <code>FileStorage</code>)</td>
 <td>SMB, NFS</td>
-<td>ZRS/LRS</td>
-<td>100.000</td>
+<td>LRS/ZRS</td>
+<td>~100.000</td>
 <td>Database file, ERP, workload I/O intensivi</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition warning">
+<p class="admonition-title">NFS solo su Premium</p>
+<p>NFS 4.1 richiede uno storage account <code>FileStorage</code> Premium. NFS non supporta cifratura in transito né autenticazione utente: l'accesso va limitato con Private Endpoint o Service Endpoint (rete come unico perimetro) e <code>secure transfer required</code> va disabilitato sull'account.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nv">RG</span><span class="o">=</span><span class="s2">"rg-storage-prod"</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nv">SA_NAME</span><span class="o">=</span><span class="s2">"mystorageaccount2026"</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Creare file share SMB Standard</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>az<span class="w"> </span>storage<span class="w"> </span>share<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--name<span class="w"> </span>myfileshare<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--quota<span class="w"> </span><span class="m">1024</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>az<span class="w"> </span>storage<span class="w"> </span>share-rm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span>--storage-account<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span>--name<span class="w"> </span>myfileshare<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span>--quota<span class="w"> </span><span class="m">1024</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># Creare file share NFS (richiede Premium tier storage account)</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
@@ -25024,7 +25028,7 @@
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>--location<span class="w"> </span>westeurope<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">  </span>--sku<span class="w"> </span>Premium_LRS<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">  </span>--kind<span class="w"> </span>FileStorage<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>--https-only<span class="w"> </span><span class="nb">false</span><span class="w">  </span><span class="c1"># NFS non usa HTTPS ma transport-level security</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>--https-only<span class="w"> </span><span class="nb">false</span><span class="w">  </span><span class="c1"># obbligatorio per NFS: niente encryption in transit, proteggere via rete</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>az<span class="w"> </span>storage<span class="w"> </span>share-rm<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25060,9 +25064,16 @@
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">  </span>/mnt/azurefiles<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">vers</span><span class="o">=</span><span class="m">3</span>.0,username<span class="o">=</span><span class="nv">$SA_NAME</span>,password<span class="o">=</span><span class="nv">$STORAGE_KEY</span>,dir_mode<span class="o">=</span><span class="m">0777</span>,file_mode<span class="o">=</span><span class="m">0777</span>,serverino
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Mount persistente in /etc/fstab</span>
-</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"//</span><span class="nv">$SA_NAME</span><span class="s2">.file.core.windows.net/myfileshare /mnt/azurefiles cifs vers=3.0,username=</span><span class="nv">$SA_NAME</span><span class="s2">,password=</span><span class="nv">$STORAGE_KEY</span><span class="s2">,dir_mode=0777,file_mode=0777,serverino 0 0"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Mount persistente in /etc/fstab: credenziali in file dedicato (non in chiaro in fstab)</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>sudo<span class="w"> </span>mkdir<span class="w"> </span>-p<span class="w"> </span>/etc/smbcredentials
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="nb">printf</span><span class="w"> </span><span class="s2">"username=%s\npassword=%s\n"</span><span class="w"> </span><span class="s2">"</span><span class="nv">$SA_NAME</span><span class="s2">"</span><span class="w"> </span><span class="s2">"</span><span class="nv">$STORAGE_KEY</span><span class="s2">"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/smbcredentials/<span class="nv">$SA_NAME</span>.cred<span class="w"> </span>&gt;<span class="w"> </span>/dev/null
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">600</span><span class="w"> </span>/etc/smbcredentials/<span class="nv">$SA_NAME</span>.cred
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">"//</span><span class="nv">$SA_NAME</span><span class="s2">.file.core.windows.net/myfileshare /mnt/azurefiles cifs nofail,vers=3.0,credentials=/etc/smbcredentials/</span><span class="nv">$SA_NAME</span><span class="s2">.cred,dir_mode=0770,file_mode=0660,serverino 0 0"</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sudo<span class="w"> </span>tee<span class="w"> </span>-a<span class="w"> </span>/etc/fstab
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Permessi e chiave</p>
+<p><code>0777</code> espone i file a ogni utente locale e la storage key dà accesso completo all'account: in produzione preferisci autenticazione identity-based (Microsoft Entra Kerberos / AD DS) e permessi restrittivi.</p>
+</div>
 <h3 id="mount-su-windows-smb">Mount su Windows (SMB)<a class="headerlink" href="#mount-su-windows-smb" title="Permanent link">&para;</a></h3>
 <div class="language-powershell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c"># Mappare come drive Z: (PowerShell)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nv">$StorageAccountName</span> <span class="p">=</span> <span class="s2">"mystorageaccount2026"</span>
@@ -25081,8 +25092,8 @@
 <p>Azure File Sync sincronizza file share on-premises con Azure Files, creando un tier ibrido dove i file acceduti raramente vengono spostati sul cloud (Cloud Tiering).</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>On-Premises Windows Server
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>├── File Server con Azure File Sync Agent
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>│   ├── Hot files → mantiene copia locale (stub)
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│   └── Cold files → solo stub, contenuto su Azure Files
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>│   ├── Hot files → contenuto completo in locale
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│   └── Cold files → solo stub (reparse point), contenuto su Azure Files
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>Azure Files (cloud share completo)
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>│   └── Tutti i file (hot + cold)
@@ -25092,7 +25103,7 @@
 2. Installare agente File Sync su Windows Server
 3. Registrare il server nel Storage Sync Service
 4. Creare Sync Group (collega Azure File Share al server endpoint)
-5. Configurare Cloud Tiering (es: mantieni ultimi 30 giorni localmente)</p>
+5. Creare il Server Endpoint e configurare Cloud Tiering (policy <em>volume free space</em> e/o <em>date</em>, es: tieni in locale solo i file acceduti negli ultimi 30 giorni)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Creare Storage Sync Service</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>az<span class="w"> </span>storagesync<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25111,8 +25122,9 @@
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">  </span>--storage-sync-service<span class="w"> </span>myfilesyncsvc<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">  </span>--sync-group-name<span class="w"> </span>sync-group-prod<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">  </span>--name<span class="w"> </span>cloud-endpoint<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span>--storage-account-resource-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">  </span>--azure-file-share-name<span class="w"> </span>myfileshare
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span>--storage-account<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">  </span>--storage-account-tenant-id<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--query<span class="w"> </span>tenantId<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">  </span>--azure-file-share-name<span class="w"> </span>myfileshare
 </span></code></pre></div>
 <h2 id="managed-disks">Managed Disks<a class="headerlink" href="#managed-disks" title="Permanent link">&para;</a></h2>
 <p>I Managed Disks sono volumi di block storage per Azure VM, gestiti da Azure (no storage account da gestire manualmente).</p>
@@ -25165,12 +25177,16 @@
 <td><strong>Ultra Disk</strong></td>
 <td>Configurabile</td>
 <td>Configurabile</td>
-<td>160000</td>
-<td>4000</td>
+<td>400000</td>
+<td>10000</td>
 <td>HPC, database ultra-performance</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Limiti indicativi</p>
+<p>I massimi dipendono da dimensione disco e dalla size della VM (che ha propri cap di IOPS/throughput): verifica la pagina <em>Disk types</em> prima di dimensionare. Premium SSD v2 e Ultra Disk non supportano host caching.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Creare disco Premium SSD v2 (IOPS/throughput configurabili indipendentemente dalla dimensione)</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>az<span class="w"> </span>disk<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25182,7 +25198,7 @@
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--zone<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--location<span class="w"> </span>westeurope
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># Creare Ultra Disk (richiede zona specifica)</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="c1"># Creare Ultra Disk (richiede zona specifica; la VM deve essere creata/aggiornata con --ultra-ssd-enabled true nella stessa zona)</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>az<span class="w"> </span>disk<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>--name<span class="w"> </span>disk-ultra-db<span class="w"> </span><span class="se">\</span>
@@ -25246,8 +25262,8 @@
 <p>Azure Queue Storage è un servizio di accodamento messaggi semplice per il disaccoppiamento di componenti applicativi. Simile ad Amazon SQS nella concettualità, ma più semplice.</p>
 <p>Caratteristiche:
 - Massimo 64 KB per messaggio
-- Massimo 500 TB per queue (storage account standard)
-- TTL default 7 giorni (configurabile fino a 7 giorni o -1 per infinito)
+- Capacità totale limitata dal solo storage account (500 TiB), non da un tetto per queue
+- TTL default 7 giorni (configurabile a qualsiasi valore positivo, oppure -1 per nessuna scadenza)
 - Visibility timeout: un messaggio è invisibile dopo il get per N secondi (worker lock)
 - At-least-once delivery (deduplication non garantita — idempotenza nel consumer)</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Creare una queue</span>
@@ -25256,7 +25272,7 @@
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>--name<span class="w"> </span>task-queue<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login
 </span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Inviare messaggio (base64 automatico con --encode true)</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Inviare messaggio (il contenuto è testo; se il consumer si aspetta base64, codificalo prima)</span>
 </span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>az<span class="w"> </span>storage<span class="w"> </span>message<span class="w"> </span>put<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span>--queue-name<span class="w"> </span>task-queue<span class="w"> </span><span class="se">\</span>
@@ -25359,7 +25375,7 @@
 </span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--default-action<span class="w"> </span>Deny<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--bypass<span class="w"> </span>AzureServices<span class="w"> </span>Logging<span class="w"> </span>Metrics
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Aggiungere subnet VNet specifica</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Aggiungere subnet VNet specifica (richiede Service Endpoint Microsoft.Storage sulla subnet)</span>
 </span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>network-rule<span class="w"> </span>add<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
@@ -25394,49 +25410,48 @@
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>az<span class="w"> </span>keyvault<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span>--name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--enable-soft-delete<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span>--enable-purge-protection<span class="w"> </span><span class="nb">true</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Creare chiave RSA in Key Vault</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--vault-name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--name<span class="w"> </span>storage-encryption-key<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--kty<span class="w"> </span>RSA<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--size<span class="w"> </span><span class="m">4096</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span>--ops<span class="w"> </span>encrypt<span class="w"> </span>decrypt<span class="w"> </span>wrapKey<span class="w"> </span>unwrapKey
-</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>
-</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="c1"># Assegnare Managed Identity allo storage account</span>
-</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">  </span>--assign-identity
-</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a>
-</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="c1"># Ottenere principalId della Managed Identity dello storage account</span>
-</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="nv">STORAGE_MI</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a><span class="w">  </span>--query<span class="w"> </span>identity.principalId<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
-</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a>
-</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a><span class="c1"># Assegnare ruolo Key Vault Crypto Service Encryption User</span>
-</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a>az<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="w">  </span>--assignee<span class="w"> </span><span class="nv">$STORAGE_MI</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span>--enable-purge-protection<span class="w"> </span><span class="nb">true</span><span class="w">  </span><span class="c1"># soft-delete è sempre attivo sui nuovi vault</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="c1"># Creare chiave RSA in Key Vault</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span>--vault-name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">  </span>--name<span class="w"> </span>storage-encryption-key<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span>--kty<span class="w"> </span>RSA<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">  </span>--size<span class="w"> </span><span class="m">4096</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span>--ops<span class="w"> </span>encrypt<span class="w"> </span>decrypt<span class="w"> </span>wrapKey<span class="w"> </span>unwrapKey
+</span><span id="__span-11-14"><a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>
+</span><span id="__span-11-15"><a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="c1"># Assegnare Managed Identity allo storage account</span>
+</span><span id="__span-11-16"><a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-17"><a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-18"><a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-19"><a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">  </span>--assign-identity
+</span><span id="__span-11-20"><a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a>
+</span><span id="__span-11-21"><a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="c1"># Ottenere principalId della Managed Identity dello storage account</span>
+</span><span id="__span-11-22"><a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="nv">STORAGE_MI</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-23"><a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-24"><a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-25"><a id="__codelineno-11-25" name="__codelineno-11-25" href="#__codelineno-11-25"></a><span class="w">  </span>--query<span class="w"> </span>identity.principalId<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-11-26"><a id="__codelineno-11-26" name="__codelineno-11-26" href="#__codelineno-11-26"></a>
+</span><span id="__span-11-27"><a id="__codelineno-11-27" name="__codelineno-11-27" href="#__codelineno-11-27"></a><span class="c1"># Assegnare ruolo Key Vault Crypto Service Encryption User</span>
+</span><span id="__span-11-28"><a id="__codelineno-11-28" name="__codelineno-11-28" href="#__codelineno-11-28"></a>az<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-29"><a id="__codelineno-11-29" name="__codelineno-11-29" href="#__codelineno-11-29"></a><span class="w">  </span>--assignee-object-id<span class="w"> </span><span class="nv">$STORAGE_MI</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-30"><a id="__codelineno-11-30" name="__codelineno-11-30" href="#__codelineno-11-30"></a><span class="w">  </span>--assignee-principal-type<span class="w"> </span>ServicePrincipal<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-31"><a id="__codelineno-11-31" name="__codelineno-11-31" href="#__codelineno-11-31"></a><span class="w">  </span>--role<span class="w"> </span><span class="s2">"Key Vault Crypto Service Encryption User"</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-11-32"><a id="__codelineno-11-32" name="__codelineno-11-32" href="#__codelineno-11-32"></a><span class="w">  </span>--scope<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>keyvault<span class="w"> </span>show<span class="w"> </span>--name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span><span id="__span-11-33"><a id="__codelineno-11-33" name="__codelineno-11-33" href="#__codelineno-11-33"></a>
-</span><span id="__span-11-34"><a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a><span class="c1"># Abilitare CMK sullo storage account</span>
-</span><span id="__span-11-35"><a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a><span class="nv">KEY_URI</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-36"><a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a><span class="w">  </span>--vault-name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-37"><a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a><span class="w">  </span>--name<span class="w"> </span>storage-encryption-key<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-38"><a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a><span class="w">  </span>--query<span class="w"> </span>key.kid<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
-</span><span id="__span-11-39"><a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a>
-</span><span id="__span-11-40"><a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-41"><a id="__codelineno-11-41" name="__codelineno-11-41" href="#__codelineno-11-41"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-42"><a id="__codelineno-11-42" name="__codelineno-11-42" href="#__codelineno-11-42"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-43"><a id="__codelineno-11-43" name="__codelineno-11-43" href="#__codelineno-11-43"></a><span class="w">  </span>--encryption-key-source<span class="w"> </span>Microsoft.Keyvault<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-44"><a id="__codelineno-11-44" name="__codelineno-11-44" href="#__codelineno-11-44"></a><span class="w">  </span>--encryption-key-uri<span class="w"> </span><span class="nv">$KEY_URI</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-45"><a id="__codelineno-11-45" name="__codelineno-11-45" href="#__codelineno-11-45"></a><span class="w">  </span>--encryption-key-vault<span class="w"> </span>https://mykeyvault-cmk.vault.azure.net/<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-46"><a id="__codelineno-11-46" name="__codelineno-11-46" href="#__codelineno-11-46"></a><span class="w">  </span>--key-vault-user-identity<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span>--query<span class="w"> </span>identity.principalId<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-11-34"><a id="__codelineno-11-34" name="__codelineno-11-34" href="#__codelineno-11-34"></a><span class="c1"># Abilitare CMK sullo storage account (identità system-assigned: nessun identity id da passare)</span>
+</span><span id="__span-11-35"><a id="__codelineno-11-35" name="__codelineno-11-35" href="#__codelineno-11-35"></a><span class="c1"># Senza --encryption-key-version Storage usa sempre l'ultima versione (auto-rotation della chiave)</span>
+</span><span id="__span-11-36"><a id="__codelineno-11-36" name="__codelineno-11-36" href="#__codelineno-11-36"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>update<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-37"><a id="__codelineno-11-37" name="__codelineno-11-37" href="#__codelineno-11-37"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-38"><a id="__codelineno-11-38" name="__codelineno-11-38" href="#__codelineno-11-38"></a><span class="w">  </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-39"><a id="__codelineno-11-39" name="__codelineno-11-39" href="#__codelineno-11-39"></a><span class="w">  </span>--encryption-key-source<span class="w"> </span>Microsoft.Keyvault<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-40"><a id="__codelineno-11-40" name="__codelineno-11-40" href="#__codelineno-11-40"></a><span class="w">  </span>--encryption-key-vault<span class="w"> </span>https://mykeyvault-cmk.vault.azure.net/<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-11-41"><a id="__codelineno-11-41" name="__codelineno-11-41" href="#__codelineno-11-41"></a><span class="w">  </span>--encryption-key-name<span class="w"> </span>storage-encryption-key
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">User-assigned identity</p>
+<p>Con una user-assigned managed identity aggiungi <code>--key-vault-user-identity-id &lt;resourceId dell'identità&gt;</code>. È utile per assegnare il ruolo sul Key Vault <em>prima</em> di creare l'account.</p>
+</div>
 <h2 id="storage-access-keys-rotation-best-practice">Storage Access Keys: Rotation Best Practice<a class="headerlink" href="#storage-access-keys-rotation-best-practice" title="Permanent link">&para;</a></h2>
 <p>Lo storage account ha sempre 2 chiavi di accesso (key1 e key2) per permettere rotation senza downtime.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Listare le chiavi</span>
@@ -25462,23 +25477,29 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Key Vault Reference per Connection String</p>
-<p>Memorizza la connection string dello storage in Key Vault e usa Key Vault References nelle App Service/Functions. Quando ruoti la chiave e aggiorni il segreto in Key Vault, le applicazioni ricevono automaticamente la nuova connection string senza redeploy.</p>
+<p>Memorizza la connection string dello storage in Key Vault e usa Key Vault References (senza versione) nelle App Service/Functions. Quando aggiorni il segreto dopo la rotation, le app lo rileggono entro circa 24 ore senza redeploy (per applicarlo subito, riavvia l'app o aggiorna il riferimento).</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Meglio: niente chiavi</p>
+<p>Il rimedio più forte alla rotation è eliminare le chiavi: usa Microsoft Entra ID con RBAC (<code>Storage Blob Data Contributor</code>, <code>Storage Queue Data Contributor</code>, ecc.) e imposta <code>--allow-shared-key-access false</code> sull'account. Imposta anche una <em>key expiration policy</em> per avere alert di rotation.</p>
 </div>
 <h2 id="diagnostics-e-monitoring">Diagnostics e Monitoring<a class="headerlink" href="#diagnostics-e-monitoring" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Abilitare diagnostics log e metriche per lo storage account</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>az<span class="w"> </span>monitor<span class="w"> </span>diagnostic-settings<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span>--resource<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span>--resource-type<span class="w"> </span>Microsoft.Storage/storageAccounts<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>--name<span class="w"> </span>diag-storage-prod<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span>--workspace<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span>rg-monitoring<span class="w"> </span>--workspace-name<span class="w"> </span>law-prod<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--logs<span class="w"> </span><span class="s1">'[</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="s1">    {"category": "StorageRead", "enabled": true},</span>
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s1">    {"category": "StorageWrite", "enabled": true},</span>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">    {"category": "StorageDelete", "enabled": true}</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">  </span>--metrics<span class="w"> </span><span class="s1">'[{"category": "Transaction", "enabled": true}, {"category": "Capacity", "enabled": true}]'</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># I log (StorageRead/Write/Delete) si configurano per servizio (blob, file, queue, table),</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># non sulla risorsa account: qui il servizio blob. Metriche: stesso resource ID del servizio.</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="nv">SA_ID</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>az<span class="w"> </span>monitor<span class="w"> </span>diagnostic-settings<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">  </span>--resource<span class="w"> </span><span class="s2">"</span><span class="nv">$SA_ID</span><span class="s2">/blobServices/default"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">  </span>--name<span class="w"> </span>diag-storage-prod<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span>--workspace<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>monitor<span class="w"> </span>log-analytics<span class="w"> </span>workspace<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span>rg-monitoring<span class="w"> </span>--workspace-name<span class="w"> </span>law-prod<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span>--logs<span class="w"> </span><span class="s1">'[</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="s1">    {"category": "StorageRead", "enabled": true},</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="s1">    {"category": "StorageWrite", "enabled": true},</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">    {"category": "StorageDelete", "enabled": true}</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">  ]'</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a><span class="w">  </span>--metrics<span class="w"> </span><span class="s1">'[{"category": "Transaction", "enabled": true}]'</span>
 </span></code></pre></div>
+<p>Ripeti con <code>fileServices/default</code>, <code>queueServices/default</code>, <code>tableServices/default</code> per gli altri servizi (in quel caso le tabelle KQL sono <code>StorageFileLogs</code>, <code>StorageQueueLogs</code>, <code>StorageTableLogs</code>).</p>
 <p>Query KQL utili per analisi storage:</p>
 <div class="language-kql highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c">// Top 10 operazioni per volume di transazioni</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">StorageBlobLogs</span>
@@ -25508,7 +25529,7 @@
 </span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">  </span>--account-name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"[0].value"</span><span class="w"> </span>-o<span class="w"> </span>tsv
 </span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># Se la porta è bloccata, usare VPN o Azure File Sync come alternativa</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># Se la porta è bloccata, usare VPN (P2S/S2S) / ExpressRoute con Private Endpoint, o Azure File Sync come alternativa</span>
 </span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># Verificare che il servizio sia abilitato per il protocollo SMB</span>
 </span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-15-13"><a id="__codelineno-15-13" name="__codelineno-15-13" href="#__codelineno-15-13"></a><span class="w">  </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span><span class="se">\</span>
@@ -25557,15 +25578,16 @@
 </span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1"># Riassegnare il ruolo se mancante</span>
 </span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="nv">STORAGE_MI</span><span class="o">=</span><span class="k">$(</span>az<span class="w"> </span>storage<span class="w"> </span>account<span class="w"> </span>show<span class="w"> </span>--resource-group<span class="w"> </span><span class="nv">$RG</span><span class="w"> </span>--name<span class="w"> </span><span class="nv">$SA_NAME</span><span class="w"> </span>--query<span class="w"> </span>identity.principalId<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
 </span><span id="__span-17-14"><a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>az<span class="w"> </span>role<span class="w"> </span>assignment<span class="w"> </span>create<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">  </span>--assignee<span class="w"> </span><span class="nv">$STORAGE_MI</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="w">  </span>--role<span class="w"> </span><span class="s2">"Key Vault Crypto Service Encryption User"</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="w">  </span>--scope<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>keyvault<span class="w"> </span>show<span class="w"> </span>--name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
-</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>
-</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a><span class="c1"># Verificare che la chiave sia nello stato "Enabled"</span>
-</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a><span class="w">  </span>--vault-name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="w">  </span>--name<span class="w"> </span>storage-encryption-key<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"attributes.enabled"</span>
+</span><span id="__span-17-15"><a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a><span class="w">  </span>--assignee-object-id<span class="w"> </span><span class="nv">$STORAGE_MI</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-16"><a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a><span class="w">  </span>--assignee-principal-type<span class="w"> </span>ServicePrincipal<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-17"><a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a><span class="w">  </span>--role<span class="w"> </span><span class="s2">"Key Vault Crypto Service Encryption User"</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-18"><a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a><span class="w">  </span>--scope<span class="w"> </span><span class="k">$(</span>az<span class="w"> </span>keyvault<span class="w"> </span>show<span class="w"> </span>--name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span>--query<span class="w"> </span>id<span class="w"> </span>-o<span class="w"> </span>tsv<span class="k">)</span>
+</span><span id="__span-17-19"><a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>
+</span><span id="__span-17-20"><a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a><span class="c1"># Verificare che la chiave sia nello stato "Enabled"</span>
+</span><span id="__span-17-21"><a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>az<span class="w"> </span>keyvault<span class="w"> </span>key<span class="w"> </span>show<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-22"><a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a><span class="w">  </span>--vault-name<span class="w"> </span>mykeyvault-cmk<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-23"><a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a><span class="w">  </span>--name<span class="w"> </span>storage-encryption-key<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-24"><a id="__codelineno-17-24" name="__codelineno-17-24" href="#__codelineno-17-24"></a><span class="w">  </span>--query<span class="w"> </span><span class="s2">"attributes.enabled"</span>
 </span></code></pre></div>
 <h3 id="scenario-4-queue-storage-messaggi-rimangono-in-coda-indefinitamente-poison-messages">Scenario 4 — Queue Storage: messaggi rimangono in coda indefinitamente (poison messages)<a class="headerlink" href="#scenario-4-queue-storage-messaggi-rimangono-in-coda-indefinitamente-poison-messages" title="Permanent link">&para;</a></h3>
 <p><strong>Sintomo:</strong> Alcuni messaggi nella queue non vengono mai elaborati e continuano a riapparire dopo il visibility timeout, causando retry loop infiniti.</p>
@@ -25617,12 +25639,16 @@
 </span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">  </span>--name<span class="w"> </span>task-queue-dlq<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="w">  </span>--auth-mode<span class="w"> </span>login
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Poison queue con Azure Functions</p>
+<p>Queue Storage non ha una DLQ nativa (a differenza di Service Bus). Il trigger queue di Azure Functions però sposta da solo i messaggi dopo 5 tentativi (<code>maxDequeueCount</code>) in una queue <code>&lt;nome&gt;-poison</code>: il codice sopra serve per consumer custom.</p>
+</div>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Usa sempre <strong>Private Endpoint</strong> invece di Service Endpoint per isolamento rete completo</li>
 <li>Abilita <strong>Soft Delete</strong> per file share e blob (protezione contro eliminazione accidentale)</li>
 <li>Per Managed Disks in produzione, usa sempre <strong>Premium SSD v1</strong> minimo, <strong>Premium SSD v2</strong> per database</li>
-<li>Imposta <code>--caching None</code> per dischi database (data files) e <code>ReadOnly</code> per OS disk</li>
+<li>Host caching (solo Premium SSD v1/Standard): <code>ReadWrite</code> di default per OS disk; <code>ReadOnly</code> per data disk con carichi read-heavy (es. data file SQL Server); <code>None</code> per log file e dischi write-heavy</li>
 <li>Usa <strong>Disk Access</strong> con Private Endpoint per esportare dischi sicuramente senza esposizione Internet</li>
 <li>Per Queue Storage, implementa sempre logica di idempotenza nel consumer (at-least-once delivery)</li>
 </ul>
