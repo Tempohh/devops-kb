@@ -7,9 +7,10 @@ search_keywords: [GCP billing, GCP pricing, Google Cloud pricing, costi GCP, ges
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/aws/fondamentali/billing-pricing, cloud/gcp/fondamentali/panoramica, cloud/gcp/dati/bigquery, cloud/gcp/containers/gke]
 official_docs: https://cloud.google.com/billing/docs
-status: complete
+status: needs-review
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Billing & Pricing GCP
@@ -47,7 +48,7 @@ GCP applica prezzi su **4 driver fondamentali**:
 - Prezzo più alto per unità
 
 ```bash
-# Verificare il prezzo di un machine type specifico
+# Specifiche di un machine type (il prezzo NON è nell'output: usare Pricing Calculator o Cloud Billing Catalog API)
 gcloud compute machine-types describe e2-standard-4 \
     --zone=europe-west8-b
 
@@ -61,6 +62,8 @@ gcloud compute machine-types list \
 
 I **SUD** sono sconti automatici che GCP applica **senza azioni da parte dell'utente** quando una VM viene usata per una certa percentuale del mese di fatturazione:
 
+Esempio per la famiglia **N1** (lo sconto massimo è il più alto):
+
 | Percentuale di utilizzo mensile | Sconto effettivo |
 |---------------------------------|-----------------|
 | 25% del mese | ~0% |
@@ -70,8 +73,10 @@ I **SUD** sono sconti automatici che GCP applica **senza azioni da parte dell'ut
 
 **Caratteristiche SUD:**
 - Applicati automaticamente — nessuna configurazione necessaria
-- Valgono per: Compute Engine N1, N2, N2D, C2, C2D, M1, M2 e GKE nodi
-- **Non si applicano** a: E2 series, Spot VM, Preemptible VM, App Engine flexible, Cloud SQL
+- Valgono solo per famiglie "legacy": N1 e M1/M2 (fino a ~30%), N2, N2D, C2, C2D (fino a ~20%); si applicano anche ai nodi GKE perché sono VM Compute Engine
+- **Non si applicano** a: E2, famiglie di nuova generazione (es. C3, N4), Spot VM, Preemptible VM, App Engine flexible, Cloud SQL
+<!-- REVIEW: verificare elenco famiglie con SUD e percentuali massime su cloud.google.com/compute/docs/sustained-use-discounts -->
+- Il contatore SUD aggrega l'uso per **famiglia di macchine e regione** (non per singola istanza): cambiare dimensione nella stessa famiglia non azzera lo sconto
 - GCP calcola l'utilizzo per **tipo di macchina** nella stessa regione — se cambi tipo ma stai nella stessa famiglia, il contatore SUD può accumularsi
 
 !!! note "SUD vs Reserved Instances AWS"
@@ -86,8 +91,12 @@ I **CUD** richiedono un impegno contrattuale di 1 o 3 anni su una quantità di r
 | vCPU generale (N1, N2, N2D) | 37% | 55% |
 | RAM generale | 37% | 55% |
 | vCPU compute-optimized (C2, C2D) | 37% | 55% |
-| vCPU memory-optimized (M1, M2) | 41% | 57% |
+| vCPU memory-optimized (M1, M2) | 41% | 63% |
 | GPU (A100, V100) | 40% | 55% |
+
+<!-- REVIEW: verificare percentuali CUD (in particolare memory-optimized 3 anni e GPU) e la migrazione ai Compute Flexible CUD multi-price (2025-2026) -->
+
+I **Flexible CUD** (spend-based) coprono la spesa Compute Engine su più famiglie e regioni con sconti inferiori ai resource-based, ma senza vincolo di macchina.
 
 **Tipi di CUD:**
 
@@ -106,9 +115,8 @@ gcloud compute commitments list \
     --filter="region:europe-west8" \
     --format="table(name,plan,status,startTimestamp,endTimestamp)"
 
-# Verificare utilizzo dei CUD (via Billing Console o API)
-gcloud billing accounts get-spending-information \
-    --billing-account=BILLING_ACCOUNT_ID
+# L'utilizzo dei CUD si verifica in Billing Console → Committed use discounts
+# o nel billing export (vedi Troubleshooting, Scenario 3)
 ```
 
 !!! warning "CUD non rimborsabili"
@@ -136,7 +144,8 @@ gcloud compute instances create my-spot-vm \
     --provisioning-model=SPOT \
     --instance-termination-action=STOP
 
-# Creare un MIG (Managed Instance Group) con Spot VM + fallback On-Demand
+# Instance template Spot (base per un MIG; il fallback On-Demand si ottiene
+# con un secondo MIG/node pool on-demand, non con questo template)
 gcloud compute instance-templates create spot-template \
     --machine-type=n2-standard-4 \
     --image-family=debian-12 \
@@ -210,11 +219,16 @@ bq query \
 - Si acquistano **slot** (unità di compute BigQuery) — ogni slot è un'unità di elaborazione parallela
 - **BigQuery Edition** (modello corrente, sostituisce flat-rate): slot su base oraria con auto-scaling
 
-| Edition | Slot minimi | Fatturazione | Use case |
-|---------|------------|-------------|---------|
-| **Standard** | 100 | Oraria (baseline + autoscaling) | Workload standard |
-| **Enterprise** | 100 | Oraria + features enterprise | SLA, BI Engine, materialize |
-| **Enterprise Plus** | 500 | Oraria | Workload mission-critical |
+| Edition | Fatturazione | Use case |
+|---------|-------------|---------|
+| **Standard** | Slot-ora, solo autoscaling (nessun commitment) | Workload standard, dev/test |
+| **Enterprise** | Slot-ora (autoscaling) + commitment 1/3 anni opzionali | Feature enterprise, governance, BI Engine |
+| **Enterprise Plus** | Come Enterprise | Workload mission-critical, requisiti di compliance/DR avanzati |
+
+Gli slot autoscalati sono fatturati per slot-ora con incrementi di 50 slot; una **baseline** opzionale riserva slot sempre attivi.
+<!-- REVIEW: verificare incrementi autoscaling, minimi e feature per edition su cloud.google.com/bigquery/docs/editions-intro -->
+
+Perché scegliere capacity: il costo diventa prevedibile e limitato dagli slot, invece di crescere con i byte scansionati.
 
 !!! note "On-demand vs Slot: quando scegliere"
     **On-demand**: team di analisi con query ad-hoc, poche query al giorno, difficile prevedere il volume.
@@ -273,22 +287,23 @@ I **Budget** GCP permettono di impostare soglie di spesa e ricevere notifiche vi
 
 ```bash
 # Creare un budget mensile di 500€ con alert a 50%, 80%, 100%
+#   (percent è una frazione: 0.5 = 50%, 1.0 = 100%)
 gcloud billing budgets create \
     --billing-account=BILLING_ACCOUNT_ID \
     --display-name="Budget Produzione Mensile" \
     --budget-amount=500EUR \
-    --threshold-rule=percent=50,basis=CURRENT_SPEND \
-    --threshold-rule=percent=80,basis=CURRENT_SPEND \
-    --threshold-rule=percent=100,basis=CURRENT_SPEND \
-    --threshold-rule=percent=100,basis=FORECASTED_SPEND
+    --threshold-rule=percent=0.5 \
+    --threshold-rule=percent=0.8 \
+    --threshold-rule=percent=1.0 \
+    --threshold-rule=percent=1.0,basis=forecasted-spend
 
 # Creare un budget filtrato su un singolo project
 gcloud billing budgets create \
     --billing-account=BILLING_ACCOUNT_ID \
     --display-name="Budget project-prod-api" \
-    --projects=projects/PROJECT_NUMBER \
+    --filter-projects=projects/PROJECT_NUMBER \
     --budget-amount=200EUR \
-    --threshold-rule=percent=90,basis=CURRENT_SPEND
+    --threshold-rule=percent=0.9
 
 # Listare i budget configurati
 gcloud billing budgets list \
@@ -307,15 +322,19 @@ gcloud pubsub topics create billing-alerts
 # Aggiornare il budget per notificare su Pub/Sub
 gcloud billing budgets update BUDGET_ID \
     --billing-account=BILLING_ACCOUNT_ID \
-    --notifications-rule-pubsub-topic=projects/PROJECT_ID/topics/billing-alerts \
-    --notifications-rule-schema-version=1.0
+    --notifications-rule-pubsub-topic=projects/PROJECT_ID/topics/billing-alerts
 ```
 
 ```python
 # Cloud Function per disabilitare la billing al superamento budget
 # (pattern comune per ambienti di sviluppo)
+import base64
 import json
 from googleapiclient import discovery
+
+# Il messaggio del budget NON contiene il project id: il budget deve essere
+# filtrato su un solo project, che la function conosce per configurazione.
+PROJECT_ID = "my-dev-project"
 
 def disable_billing_on_budget_exceed(data, context):
     """Disabilita billing su un project quando il budget è superato."""
@@ -325,7 +344,7 @@ def disable_billing_on_budget_exceed(data, context):
     budget_amount = float(pubsub_data.get('budgetAmount', 0))
 
     if cost_amount >= budget_amount:
-        project_id = pubsub_data['projectId']
+        project_id = PROJECT_ID
         billing = discovery.build('cloudbilling', 'v1')
         billing.projects().updateBillingInfo(
             name=f'projects/{project_id}',
@@ -334,7 +353,7 @@ def disable_billing_on_budget_exceed(data, context):
 ```
 
 !!! warning "Budget Alert ≠ Blocco automatico"
-    Per default, i budget GCP inviano solo **notifiche** — non bloccano automaticamente la spesa. Per bloccare automaticamente usare il pattern Pub/Sub + Cloud Function mostrato sopra. Usare con cautela in produzione.
+    Per default, i budget GCP inviano solo **notifiche** — non bloccano automaticamente la spesa. Per bloccare automaticamente usare il pattern Pub/Sub + Cloud Function mostrato sopra. Usare con cautela in produzione. Le notifiche budget hanno latenza (i dati di costo arrivano con ritardo): la spesa può superare la soglia prima dello stop. Scollegare il billing non è un limite di spesa garantito.
 
 ---
 
@@ -445,7 +464,8 @@ gcloud recommender recommendations list \
     --recommender=google.compute.instance.MachineTypeRecommender \
     --format="table(name,description,stateInfo.state)"
 
-# Applicare una raccomandazione (richiede conferma manuale)
+# Marcare una raccomandazione come "claimed" (in lavorazione): NON la applica,
+# l'intervento resta manuale. Dopo: mark-succeeded / mark-failed
 gcloud recommender recommendations mark-claimed \
     projects/PROJECT_ID/locations/europe-west8-b/recommenders/google.compute.instance.MachineTypeRecommender/recommendations/RECOMMENDATION_ID \
     --etag=ETAG
@@ -471,8 +491,8 @@ gcloud container clusters update my-cluster \
     --update-labels=environment=prod,team=platform
 ```
 
-!!! tip "Labels obbligatori via Organization Policy"
-    Usare **Organization Policy** con il constraint `constraints/gcp.resourceLocations` combinato con tag obbligatori per forzare la presenza di label su tutte le risorse. Questo garantisce che ogni risorsa sia attribuita correttamente nel billing export.
+!!! tip "Labels obbligatori: enforcement"
+    Non esiste un constraint built-in di Organization Policy che imponga label obbligatorie (`constraints/gcp.resourceLocations` limita solo le **regioni**). Opzioni: **custom organization constraint** (CEL) sui tipi di risorsa supportati, oppure policy-as-code in CI sul Terraform (es. OPA/Conftest, `google_*` con `default_labels` nel provider). Così ogni risorsa è attribuita nel billing export.
 
 ---
 
@@ -493,9 +513,9 @@ Risorse sempre gratuite entro i limiti mensili:
 | **Compute Engine** | 1 × e2-micro VM (us-east1, us-west1, us-central1) |
 | **Cloud Storage** | 5 GB nella regione us |
 | **Cloud Functions** | 2M invocazioni/mese + 400K GB-sec |
-| **Cloud Run** | 2M request/mese + 360K vCPU-sec |
+| **Cloud Run** | 2M request/mese + 180K vCPU-sec + 360K GiB-sec |
 | **BigQuery** | 10 GB storage + 1 TB query/mese |
-| **Cloud Build** | 120 minuti build/giorno |
+| **Cloud Build** | Minuti build mensili gratuiti (e2-standard-2) <!-- REVIEW: verificare quota corrente (storicamente 120 min/giorno, poi 2.500 min/mese) --> |
 | **Pub/Sub** | 10 GB messaggi/mese |
 | **Cloud Logging** | 50 GB log/mese |
 | **Secret Manager** | 6 versioni attive + 10K accessi/mese |
@@ -510,10 +530,10 @@ Risorse sempre gratuite entro i limiti mensili:
 | Concetto | GCP | AWS | Azure |
 |----------|-----|-----|-------|
 | Sconto automatico utilizzo | **SUD** (automatico, fino a 30%) | Nessuno | Nessuno |
-| Sconto con impegno | **CUD** 1/3yr (37-57%) | Reserved Instances / Savings Plans (fino a 72%) | Reserved VM (fino a 72%) |
+| Sconto con impegno | **CUD** 1/3yr (37-63%) | Reserved Instances / Savings Plans (fino a 72%) | Reserved VM (fino a 72%) |
 | VM interrompibili | **Spot VM** (fino a 91%) | Spot Instances (fino a 90%) | Spot VMs (fino a 90%) |
 | Free tier permanente | Sì (e2-micro, BigQuery 1TB, ecc.) | Sì (t2.micro, Lambda 1M req, ecc.) | Sì (B1S VM 12 mesi, Functions 1M, ecc.) |
-| Free trial | $300 per 90 giorni | Nessun credito (solo Free Tier) | $200 per 30 giorni |
+| Free trial | $300 per 90 giorni | Free Plan per nuovi account (crediti fino a ~$200, 6 mesi) + Always Free <!-- REVIEW: verificare condizioni attuali AWS Free Plan --> | $200 per 30 giorni |
 | Billing export nativo | BigQuery (granulare) | S3 + CUR (granulare) | Storage Account (granulare) |
 | Cost management tool | Billing Console + Recommender | Cost Explorer + Trusted Advisor | Azure Cost Management |
 | Impegno minimo CUD | vCPU/RAM (resource-based) | Istanza specifica o spesa $/hr | vCPU/RAM (più flessibile) |
@@ -625,8 +645,8 @@ bq query --use_legacy_sql=false '
 SELECT
     usage_start_time,
     sku.description,
-    credits[OFFSET(0)].name AS credit_type,
-    ROUND(SUM(credits[OFFSET(0)].amount), 4) AS credit_amount
+    credit.name AS credit_type,
+    ROUND(SUM(credit.amount), 4) AS credit_amount
 FROM `PROJECT_ID.billing_export.gcp_billing_export_v1_*`,
 UNNEST(credits) AS credit
 WHERE
@@ -662,8 +682,8 @@ gcloud billing projects link PROJECT_ID \
 ```
 
 !!! warning "Dati non persi ma servizi sospesi"
-    Quando un project perde il billing, le risorse vengono **sospese** (non eliminate). I dati rimangono. Dopo 30 giorni senza billing attivo, le risorse possono essere eliminate definitivamente. Ripristinare il billing prima della scadenza.
-
+    Quando un project perde il billing, le risorse vengono **sospese** (non eliminate). I dati rimangono per un periodo limitato, ma risorse e project senza billing possono essere eliminati in via definitiva. Ripristinare il billing il prima possibile.
+    <!-- REVIEW: verificare tempistiche esatte di cancellazione delle risorse dopo disabilitazione billing -->
 ---
 
 ## Relazioni
