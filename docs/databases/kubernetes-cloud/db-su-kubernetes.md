@@ -7,14 +7,18 @@ search_keywords: [database kubernetes, statefulset postgresql, persistent volume
 parent: databases/kubernetes-cloud/_index
 related: [databases/postgresql/connection-pooling, databases/replicazione-ha/backup-pitr, databases/postgresql/replicazione]
 official_docs: https://cloudnative-pg.io/documentation/
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Database su Kubernetes
 
 ## Panoramica
+
+!!! note "Acronimi usati"
+    **PV/PVC** = PersistentVolume / PersistentVolumeClaim (volume e richiesta di volume); **CSI** = Container Storage Interface (plugin standard di storage); **WAL** = Write-Ahead Log; **PITR** = Point-In-Time Recovery; **AZ** = Availability Zone; **IOPS** = operazioni I/O al secondo.
 
 Eseguire database su Kubernetes è diventato praticabile con l'operatore pattern e i CSI driver per storage persistente. Non è per tutti — richiede competenze di database e Kubernetes contemporaneamente — ma elimina l'eterogeneità dell'infrastruttura e riduce i costi rispetto ai managed service.
 
@@ -60,17 +64,13 @@ spec:
         fsGroup: 999          # Gruppo postgres
         runAsUser: 999
 
-      initContainers:
-      - name: init-permissions
-        image: busybox
-        command: ["sh", "-c", "chown -R 999:999 /var/lib/postgresql/data"]
-        volumeMounts:
-        - name: postgres-data
-          mountPath: /var/lib/postgresql/data
-
+      # Nessun initContainer chown: l'init gira già come utente 999 (non root) e non potrebbe
+      # cambiare owner; `fsGroup` fa montare il volume con il gruppo 999 scrivibile.
       containers:
       - name: postgres
         image: postgres:17
+        # L'immagine ufficiale NON legge /etc/postgresql/postgresql.conf da sola: va indicato esplicitamente
+        args: ["-c", "config_file=/etc/postgresql/postgresql.conf"]
         env:
         - name: POSTGRES_DB
           value: mydb
@@ -179,7 +179,7 @@ volumeBindingMode: WaitForFirstConsumer  # Crea il volume nella stessa AZ del po
 
 Gestire PostgreSQL su Kubernetes manualmente (StatefulSet + script custom) è complesso e error-prone. Gli **operator** incapsulano le best practice di gestione del database come logica Kubernetes.
 
-**[CloudNativePG](https://cloudnative-pg.io/)** (CNPG) è l'operator più maturo per PostgreSQL su Kubernetes, sviluppato da EDB e donato alla CNCF.
+**[CloudNativePG](https://cloudnative-pg.io/)** (CNPG) è l'operator più maturo per PostgreSQL su Kubernetes, sviluppato da EDB e accettato nella CNCF (livello Sandbox, 2025).
 
 ```yaml
 # Cluster PostgreSQL con CloudNativePG (3 nodi: 1 primary + 2 replica)
@@ -198,7 +198,7 @@ spec:
       shared_buffers: "2GB"
       max_connections: "200"
       wal_level: "replica"
-      synchronous_commit: "remote_write"
+      synchronous_commit: "remote_write"   # ha effetto solo con repliche sincrone (spec.postgresql.synchronous)
 
   bootstrap:
     initdb:
@@ -216,6 +216,8 @@ spec:
     storageClass: gp3
 
   # Backup su S3 via WAL archiving
+  # <!-- REVIEW: verificare -->: `barmanObjectStore` in-tree risulta deprecato dalle release CNPG recenti
+  # in favore del Barman Cloud Plugin (CRD ObjectStore + `plugins:` nel Cluster); controllare la versione in uso
   backup:
     retentionPolicy: "30d"
     barmanObjectStore:
@@ -308,8 +310,8 @@ kubectl krew install cnpg
 # Stato del cluster
 kubectl cnpg status postgres-cluster -n databases
 
-# Switchover manuale (promuove una replica)
-kubectl cnpg promote postgres-cluster -n databases
+# Switchover manuale: serve il nome dell'istanza replica da promuovere
+kubectl cnpg promote postgres-cluster postgres-cluster-2 -n databases
 
 # Psql interattivo sul primary
 kubectl cnpg psql postgres-cluster -n databases
@@ -317,13 +319,16 @@ kubectl cnpg psql postgres-cluster -n databases
 # Backup immediato
 kubectl cnpg backup postgres-cluster -n databases
 
-# Verifica backup
+# Stato dettagliato (include info su backup/WAL archiving)
 kubectl cnpg status postgres-cluster -n databases --verbose
 ```
 
 ---
 
 ## PodDisruptionBudget — Protezione durante Manutenzione
+
+!!! warning "Con CNPG il PDB è già gestito"
+    CloudNativePG crea e mantiene da solo i PodDisruptionBudget del cluster (`enablePDB: true` di default). Un PDB manuale come quello sotto serve solo per StatefulSet gestiti a mano; con CNPG è ridondante e può bloccare i drain dei nodi.
 
 ```yaml
 # Garantisce che almeno 2 nodi siano sempre disponibili durante drain/upgrade
@@ -347,6 +352,7 @@ spec:
 - **Storage class con `reclaimPolicy: Retain`**: il `Delete` default elimina il PV quando il PVC viene cancellato — catastrofico per un database. Sempre `Retain` in produzione
 - **Separare WAL e data su storage diversi**: reduce la contesa I/O e permette sizing indipendente
 - **PodAntiAffinity**: distribuire le repliche su nodi fisici diversi — altrimenti un nodo down elimina il quorum
+- **`requests` = `limits` per memoria (QoS Guaranteed)**: meno rischio di eviction/OOM sotto pressione del nodo; evitare limiti CPU stretti che causano throttling
 - **Risorse definite con `requests` e `limits`**: senza limits, il database può consumare tutta la RAM del nodo causando OOM kill di altri pod; senza requests, lo scheduler non garantisce le risorse
 
 ## Troubleshooting
@@ -454,17 +460,16 @@ EOF
 
 **Causa:** Secret con credenziali S3 errate o assenti, IAM role non associato al service account, bucket inesistente o policy S3 troppo restrittiva.
 
-**Soluzione:** Verificare il Secret, il ServiceAccount e le policy S3.
+**Soluzione:** Verificare il Secret, il ServiceAccount e le policy S3. Su EKS preferire IAM Roles for Service Accounts (`inheritFromIAMRole: true`) alle chiavi statiche.
 
 ```bash
 # Stato del backup
 kubectl get backup -n databases
 kubectl describe backup postgres-backup-20240115 -n databases
 
-# Verifica il Secret delle credenziali S3
+# Verifica che il Secret abbia le chiavi attese (solo nomi: non stampare i valori in chiaro)
 kubectl get secret s3-credentials -n databases -o jsonpath='{.data}' | \
-  python3 -c "import sys,json,base64; d=json.load(sys.stdin); \
-  [print(k, base64.b64decode(v).decode()) for k,v in d.items()]"
+  python3 -c "import sys,json; print(list(json.load(sys.stdin)))"
 
 # Log del controller CNPG per errori dettagliati
 kubectl logs -n cnpg-system -l app.kubernetes.io/name=cloudnative-pg --tail=50
@@ -483,7 +488,7 @@ aws s3 ls s3://my-cnpg-backups/ --region eu-west-1
 
 ### Scenario 5 — Performance I/O degradate rispetto all'atteso
 
-**Sintomo:** Query lente, alta latenza sui write, `pg_stat_bgwriter` mostra checkpoint frequenti.
+**Sintomo:** Query lente, alta latenza sui write, `pg_stat_checkpointer` (PG17+; `pg_stat_bgwriter` prima) mostra checkpoint frequenti per richiesta.
 
 **Causa:** Storage network (EBS, Azure Disk) con latenza 1-5ms vs NVMe locale; `shared_buffers` e `checkpoint_completion_target` non ottimizzati per il volume di workload.
 
@@ -491,17 +496,14 @@ aws s3 ls s3://my-cnpg-backups/ --region eu-west-1
 
 ```bash
 # Misura le performance I/O dello storage dal pod
-kubectl exec -it postgres-0 -n databases -- \
-  dd if=/dev/zero of=/var/lib/postgresql/data/testfile bs=1M count=1000 oflag=direct
+# (pod CNPG: postgres-cluster-N; con StatefulSet manuale: postgres-0). Il file di test viene rimosso
+kubectl exec -it postgres-cluster-1 -n databases -c postgres -- \
+  sh -c 'dd if=/dev/zero of=/var/lib/postgresql/data/ddtest bs=1M count=1000 oflag=direct; rm -f /var/lib/postgresql/data/ddtest'
 
-# Query PostgreSQL per statistiche I/O
+# Verifica checkpoint troppo frequenti (PostgreSQL 17+: colonne in pg_stat_checkpointer;
+# prima di PG17 erano in pg_stat_bgwriter come checkpoints_timed/checkpoints_req)
 kubectl cnpg psql postgres-cluster -n databases -- \
-  -c "SELECT * FROM pg_stat_bgwriter;"
-
-# Verifica checkpoint troppo frequenti
-kubectl cnpg psql postgres-cluster -n databases -- \
-  -c "SELECT checkpoints_timed, checkpoints_req, checkpoint_write_time,
-             checkpoint_sync_time FROM pg_stat_bgwriter;"
+  -c "SELECT num_timed, num_requested, write_time, sync_time FROM pg_stat_checkpointer;"
 
 # Aumenta shared_buffers al 25% della RAM disponibile (via CNPG patch)
 kubectl patch cluster postgres-cluster -n databases --type=merge \
