@@ -10611,7 +10611,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10636,7 +10636,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10921,7 +10921,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10991,7 +10991,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11061,7 +11061,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11131,7 +11131,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24837,37 +24837,33 @@
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>     Modificano l'oggetto (eseguiti in serie):
 </span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>       - DefaultStorageClass (aggiunge storageClass di default)
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>       - MutatingAdmissionWebhook (webhook custom, es. sidecar injection)
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>       - MutatingAdmissionPolicy (CEL, senza webhook) &lt;!-- REVIEW: verificare versione/stato GA di MutatingAdmissionPolicy --&gt;
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>       &lt;!-- REVIEW: verificare che kernel &gt;= 5.13 sia il requisito attuale di kube-proxy nftables --&gt;
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>       &lt;!-- REVIEW: verificare che KMS v2 sia stabile dalla 1.29 --&gt;
-</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>       &lt;!-- REVIEW: verificare che il restore con etcdctl sia deprecato da etcd 3.6 --&gt;
-</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>       &lt;!-- (marker non renderizzati; il lifecycle li passa a currency) --&gt;
-</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>       - NamespaceLifecycle, LimitRanger, ServiceAccount
-</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>
-</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    |
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>    v
-</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>  4. OBJECT SCHEMA VALIDATION — È ben formato?
-</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>     Validation tramite OpenAPI schema per ogni GVK (Group/Version/Kind)
-</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>     (dopo le mutazioni: valida l'oggetto finale, non quello inviato)
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>
-</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>    |
-</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>    v
-</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>  5. VALIDATING ADMISSION — È consentito dalle policy?
-</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>     Validano, non modificano (eseguiti in parallelo):
-</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>       - ValidatingAdmissionWebhook (OPA Gatekeeper, Kyverno)
-</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>       - ValidatingAdmissionPolicy (CEL in-process, GA dalla 1.30)
-</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>       - ResourceQuota, PodSecurity
-</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>
-</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>    |
-</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>    v
-</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>  6. PERSIST TO etcd
-</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>     Oggetto serializzato (protobuf per le risorse built-in, JSON per i CRD) scritto in etcd
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>       - MutatingAdmissionPolicy (CEL, senza webhook, GA dalla 1.36)
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>       - NamespaceLifecycle, LimitRanger, ServiceAccount
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    |
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    v
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>  4. OBJECT SCHEMA VALIDATION — È ben formato?
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>     Validation tramite OpenAPI schema per ogni GVK (Group/Version/Kind)
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>     (dopo le mutazioni: valida l'oggetto finale, non quello inviato)
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>    |
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>    v
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>  5. VALIDATING ADMISSION — È consentito dalle policy?
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>     Validano, non modificano (eseguiti in parallelo):
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>       - ValidatingAdmissionWebhook (OPA Gatekeeper, Kyverno)
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>       - ValidatingAdmissionPolicy (CEL in-process, GA dalla 1.30)
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>       - ResourceQuota, PodSecurity
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>    |
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    v
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>  6. PERSIST TO etcd
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>     Oggetto serializzato (protobuf per le risorse built-in, JSON per i CRD) scritto in etcd
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>    |
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    v
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>  7. RESPONSE all'utente
 </span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>
-</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>    |
-</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a>    v
-</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>  7. RESPONSE all'utente
-</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>
-</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>  (In parallelo: controllers e scheduler watchano le modifiche via Watch API)
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a>  (In parallelo: controllers e scheduler watchano le modifiche via Watch API)
 </span></code></pre></div>
 <p><strong>API Groups e Versioning:</strong></p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># K8s organizza le API in gruppi</span>

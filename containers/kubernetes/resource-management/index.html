@@ -10602,7 +10602,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10707,7 +10707,7 @@
     
   
   
-    <span class="md-status md-status--needs-review"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -10786,7 +10786,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10811,7 +10811,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -10968,10 +10968,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#resourcequota-per-qos-class" class="md-nav__link">
+  <a href="#resourcequota-con-scope-priorityclass-qos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ResourceQuota per QoS Class
+        ResourceQuota con Scope (PriorityClass, QoS)
       
     </span>
   </a>
@@ -11033,6 +11033,17 @@
     <span class="md-ellipsis">
       
         Anti-pattern da Evitare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#novita-resize-in-place-e-risorse-a-livello-di-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Novità: resize in-place e risorse a livello di pod
       
     </span>
   </a>
@@ -11206,7 +11217,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11276,7 +11287,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--reviewed"></span>
   
 
   
@@ -24746,10 +24757,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#resourcequota-per-qos-class" class="md-nav__link">
+  <a href="#resourcequota-con-scope-priorityclass-qos" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ResourceQuota per QoS Class
+        ResourceQuota con Scope (PriorityClass, QoS)
       
     </span>
   </a>
@@ -24811,6 +24822,17 @@
     <span class="md-ellipsis">
       
         Anti-pattern da Evitare
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#novita-resize-in-place-e-risorse-a-livello-di-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Novità: resize in-place e risorse a livello di pod
       
     </span>
   </a>
@@ -25115,21 +25137,25 @@
 <tbody>
 <tr>
 <td><strong>Guaranteed</strong></td>
-<td><code>requests == limits</code> per TUTTI i container, per CPU e memoria</td>
+<td>TUTTI i container (init inclusi) hanno <code>requests == limits</code> sia per CPU sia per memoria (se si dichiarano solo i limits, le requests ereditano lo stesso valore)</td>
 <td>Ultima (più protetta)</td>
 </tr>
 <tr>
 <td><strong>Burstable</strong></td>
-<td>Almeno un container ha requests &lt; limits, OPPURE solo memory request impostata</td>
+<td>Non è Guaranteed e almeno un container ha una request o un limit (CPU o memoria)</td>
 <td>Media</td>
 </tr>
 <tr>
 <td><strong>BestEffort</strong></td>
-<td>Nessun request né limit impostato</td>
+<td>Nessun container ha request né limit</td>
 <td>Prima (meno protetta)</td>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Eviction non è solo QoS</p>
+<p>Il kubelet, sotto pressione di memoria, ordina i pod candidati per: (1) se l'uso supera le <code>requests</code>, (2) <code>PriorityClass</code>, (3) uso rispetto alle requests. La QoS class è quindi una conseguenza (BestEffort supera sempre le requests=0), non il criterio diretto. Un pod Guaranteed può comunque essere evicato se i processi di sistema consumano più di quanto riservato (<code>system-reserved</code>/<code>kube-reserved</code>). Distinto è l'<strong>OOM kill</strong> a livello cgroup (container oltre il proprio <code>limits.memory</code>), che avviene senza passare dall'eviction.</p>
+</div>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Guaranteed — requests == limits su tutti i container</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">containers</span><span class="p">:</span>
@@ -25162,7 +25188,7 @@
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">Quando usare Guaranteed</p>
-<p>Workload critici (database, sistema di pagamenti, componenti di infrastruttura) devono essere <code>Guaranteed</code>. I pod <code>Guaranteed</code> non vengono evicati a meno che non superino i propri limits. Il costo è che lo scheduler non piazza il pod se il nodo non ha abbastanza risorse allocatable pari ai limits.</p>
+<p>Workload critici (database, sistema di pagamenti, componenti di infrastruttura) conviene siano <code>Guaranteed</code>: sono gli ultimi candidati all'eviction e, con la CPU Manager policy <code>static</code> e requests intere (es. <code>cpu: "2"</code>), ottengono core esclusivi (utile per workload latency-sensitive). Il costo è che lo scheduler riserva l'intero limit: nessuna possibilità di overcommit e minor densità sul nodo.</p>
 </div>
 <h3 id="flusso-di-scheduling-e-enforcement">Flusso di Scheduling e Enforcement<a class="headerlink" href="#flusso-di-scheduling-e-enforcement" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>1. Utente crea Pod con requests/limits dichiarati
@@ -25170,19 +25196,24 @@
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>2. kube-scheduler seleziona nodo:
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>   sum(existing pod requests) + new pod requests ≤ node allocatable
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        ↓
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>3. kubelet ammette il pod sul nodo (ammission control)
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>3. kubelet ammette il pod sul nodo (admission control)
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        ↓
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>4. Container Runtime (containerd) applica:
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>   - CPU: cgroups cpu.shares (requests) + cpu.cfs_quota (limits)
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>   - Memory: cgroups memory.limit_in_bytes (limits)
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        ↓
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>5. Runtime enforcement:
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>   - CPU oltre limits → throttling (container rallenta, non muore)
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>   - Memory oltre limits → OOMKiller uccide il container
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        ↓
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>6. Kubelet eviction (node pressure):
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>   - Ordine: BestEffort → Burstable (oltre requests) → Guaranteed
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>4. Container Runtime (containerd) configura i cgroup:
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>   - cgroup v2 (default sulle distro moderne):
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>     CPU requests → cpu.weight (peso relativo solo in contesa)
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>     CPU limits   → cpu.max (quota/periodo, tipicamente 100ms)
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>     Memory limits → memory.max
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>   - cgroup v1 (legacy): cpu.shares, cpu.cfs_quota_us, memory.limit_in_bytes
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>        ↓
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>5. Runtime enforcement:
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>   - CPU oltre limits → throttling (container rallenta, non muore)
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>   - Memory oltre limits → OOM killer uccide il container
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        ↓
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>6. Kubelet eviction (node pressure):
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>   - Pod sopra le requests prima, poi PriorityClass, poi uso relativo:
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>     in pratica BestEffort → Burstable (oltre requests) → Guaranteed
 </span></code></pre></div>
+<p>Perché le <code>requests</code> CPU contano solo sotto contesa: <code>cpu.weight</code> ripartisce i cicli in proporzione quando i core sono saturi; a nodo scarico un container può usare più delle sue requests (fino al limit, se presente). La memoria invece non si "ripartisce": non è comprimibile, quindi o c'è o scatta OOM/eviction.</p>
 <hr />
 <h2 id="configurazione-pratica">Configurazione &amp; Pratica<a class="headerlink" href="#configurazione-pratica" title="Permanent link">&para;</a></h2>
 <h3 id="dichiarazione-risorse-nel-pod">Dichiarazione Risorse nel Pod<a class="headerlink" href="#dichiarazione-risorse-nel-pod" title="Permanent link">&para;</a></h3>
@@ -25202,7 +25233,7 @@
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1000m"</span>
 </span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"512Mi"</span>
 </span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sidecar</span>
-</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">envoy:latest</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">envoyproxy/envoy:v1.32.0</span>
 </span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="nt">resources</span><span class="p">:</span>
 </span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">      </span><span class="nt">requests</span><span class="p">:</span>
 </span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">        </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"50m"</span>
@@ -25302,11 +25333,12 @@
 <p class="admonition-title">ResourceQuota e LimitRange insieme</p>
 <p>Se un namespace ha una ResourceQuota su <code>requests.cpu</code>, TUTTI i pod in quel namespace devono dichiarare <code>resources.requests.cpu</code>. Altrimenti la creazione fallisce. Per questo LimitRange con <code>defaultRequest</code> è quasi sempre necessario insieme a ResourceQuota.</p>
 </div>
-<h3 id="resourcequota-per-qos-class">ResourceQuota per QoS Class<a class="headerlink" href="#resourcequota-per-qos-class" title="Permanent link">&para;</a></h3>
+<h3 id="resourcequota-con-scope-priorityclass-qos">ResourceQuota con Scope (PriorityClass, QoS)<a class="headerlink" href="#resourcequota-con-scope-priorityclass-qos" title="Permanent link">&para;</a></h3>
+<p>Gli <code>scopes</code> restringono la quota a un sottoinsieme di pod. <code>scopeSelector</code> con <code>PriorityClass</code> separa il budget dei workload critici; lo scope <code>BestEffort</code> permette di limitare (solo come numero di <code>pods</code>) i pod senza risorse.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nt">metadata</span><span class="p">:</span>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">guaranteed-only</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical-priority-quota</span>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">critical-apps</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nt">spec</span><span class="p">:</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
@@ -25343,12 +25375,12 @@
 </span></code></pre></div>
 <p><strong>Regola empirica per avvio:</strong>
 - <code>requests.cpu</code> = 50-70% del consumo medio rilevato
-- <code>limits.cpu</code> = 2-4x le requests (burst temporaneo accettabile)
-- <code>requests.memory</code> = consumo medio + 20% buffer
-- <code>limits.memory</code> = requests.memory × 1.5-2 (non troppo alto — OOM kill è violento)</p>
+- <code>limits.cpu</code> = 2-4x le requests (burst temporaneo accettabile) oppure nessun limit (vedi sotto)
+- <code>requests.memory</code> = consumo medio + 20% buffer (meglio il p95/picco per workload con memoria stabile)
+- <code>limits.memory</code> = requests.memory × 1.0-2 (non troppo alto — OOM kill è violento)</p>
 <div class="admonition tip">
 <p class="admonition-title">Memory limits stretti</p>
-<p>Impostare <code>limits.memory</code> molto vicino a <code>requests.memory</code> (ratio 1.0-1.5) aumenta la stabilità: il container va in OOM e si riavvia pulito invece di occupare memoria in modo irregolare. Meglio un restart controllato che un nodo degradato.</p>
+<p>Impostare <code>limits.memory</code> uguale o molto vicino a <code>requests.memory</code> (ratio 1.0-1.5) aumenta la prevedibilità: la somma dei limits non supera di molto la RAM del nodo, quindi si riduce il rischio di pressione di memoria sul nodo e di eviction a catena. Il container che sfora va in OOM e si riavvia da solo: meglio un restart controllato che un nodo degradato.</p>
 </div>
 <h3 id="pattern-multi-tenant">Pattern Multi-tenant<a class="headerlink" href="#pattern-multi-tenant" title="Permanent link">&para;</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>Namespace ┌─────────────────────────────┐
@@ -25369,7 +25401,11 @@
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># 4. RBAC per isolamento permessi</span>
 </span></code></pre></div>
 <h3 id="cpu-throttling-e-limits">CPU Throttling e Limits<a class="headerlink" href="#cpu-throttling-e-limits" title="Permanent link">&para;</a></h3>
-<p>Il CPU throttling è invisibile ma degrada le performance. Un container che usa <code>500m</code> con <code>limits.cpu=500m</code> non viene mai throttled. Uno con <code>requests.cpu=100m</code> e <code>limits.cpu=500m</code> viene throttled quando la domanda supera il tempo CPU disponibile.</p>
+<p>Il CPU throttling è invisibile ma degrada le performance. Il limit è una <strong>quota per periodo</strong> (CFS, tipicamente 100 ms): <code>limits.cpu=500m</code> = 50 ms di CPU ogni 100 ms, sommati su tutti i thread. Un'app multi-thread può esaurire la quota in pochi ms e restare ferma fino al periodo successivo, quindi si è throttled (con latenze di coda alte) anche se la media di utilizzo è sotto il limit. Le <code>requests</code> invece non causano throttling: contano solo per lo scheduling e per il peso in caso di contesa.</p>
+<div class="admonition note">
+<p class="admonition-title">Dibattito: CPU limits sì o no</p>
+<p>Molti team (e parte delle guide di tuning) omettono i <code>limits.cpu</code> per i workload latency-sensitive e tengono solo le <code>requests</code>: la CPU è comprimibile, a nodo scarico il container può usare cicli liberi e in contesa le requests garantiscono la quota minima. Tenere i limits ha senso per batch/rumorosi, multi-tenant non fidati o per ottenere QoS Guaranteed. Conseguenza dell'omissione: il pod diventa Burstable, non Guaranteed.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Verificare CPU throttling (richiede accesso ai nodi o metrics server avanzato)</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Con Prometheus:</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># rate(container_cpu_cfs_throttled_seconds_total[5m])</span>
@@ -25378,7 +25414,7 @@
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">CPU Limits e Java/JVM</p>
-<p>Applicazioni JVM in container richiedono <code>-XX:+UseContainerSupport</code> (default da Java 8u191+) per rispettare i CPU limits. Senza questo flag, la JVM vede i core del nodo fisico e crea thread pool oversized. Verificare sempre <code>JAVA_OPTS</code> nelle immagini legacy.</p>
+<p>La JVM dimensiona thread pool e heap leggendo i cgroup: <code>-XX:+UseContainerSupport</code> è attivo di default da Java 10 e 8u191+. Su versioni più vecchie, o con <code>-XX:-UseContainerSupport</code>, la JVM vede core e RAM del nodo fisico e crea pool oversized. Il numero di CPU rilevato deriva dal <strong>limit</strong> (non dalle requests): senza <code>limits.cpu</code> la JVM vede tutti i core del nodo. Per l'heap usare <code>-XX:MaxRAMPercentage</code> invece di <code>-Xmx</code> fisso, lasciando margine per metaspace e thread stack.</p>
 </div>
 <h3 id="anti-pattern-da-evitare">Anti-pattern da Evitare<a class="headerlink" href="#anti-pattern-da-evitare" title="Permanent link">&para;</a></h3>
 <table>
@@ -25402,7 +25438,7 @@
 </tr>
 <tr>
 <td>limits.memory molto sopra requests</td>
-<td>Pod occupa molta memoria senza essere evictable</td>
+<td>Overcommit di RAM: il nodo può esaurire la memoria prima che i singoli container raggiungano il limit → eviction a catena</td>
 <td>ratio memory limit/request ≤ 2</td>
 </tr>
 <tr>
@@ -25417,6 +25453,9 @@
 </tr>
 </tbody>
 </table>
+<h3 id="novita-resize-in-place-e-risorse-a-livello-di-pod">Novità: resize in-place e risorse a livello di pod<a class="headerlink" href="#novita-resize-in-place-e-risorse-a-livello-di-pod" title="Permanent link">&para;</a></h3>
+<!-- REVIEW: verificare stato corrente (versione di GA) di In-Place Pod Resize (KEP-1287) e Pod-level resources (KEP-2837) su kubernetes.io -->
+<p>Storicamente cambiare requests/limits richiedeva ricreare il pod. Le versioni recenti di Kubernetes introducono il <strong>resize in-place</strong> (<code>kubectl patch pod ... --subresource resize</code>, beta dalla 1.33) che modifica le risorse di un container senza riavviarlo (con <code>resizePolicy</code> per scegliere se serve il restart), e le <strong>pod-level resources</strong> (<code>spec.resources</code>) per condividere un budget tra container. Controllare la versione del cluster e i feature gate prima di usarli; abilitano anche VPA in modalità <code>InPlaceOrRecreate</code> (vedi <a href="../autoscaling/">Autoscaling</a>).</p>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="oomkilled">OOMKilled<a class="headerlink" href="#oomkilled" title="Permanent link">&para;</a></h3>
