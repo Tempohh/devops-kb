@@ -7,9 +7,10 @@ search_keywords: [docker security hardening, rootless docker, linux capabilities
 parent: containers/docker/_index
 related: [containers/docker/architettura-interna, containers/kubernetes/sicurezza, security/supply-chain/image-scanning]
 official_docs: https://docs.docker.com/engine/security/
-status: complete
+status: reviewed
 difficulty: expert
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Docker Sicurezza
@@ -79,31 +80,35 @@ Rootless Docker — Come funziona
       |
       | newuidmap/newgidmap (SUID helpers)
       v
-  User Namespace:
-    Container UID 0 (root) → Host UID 100000 (subUID di bob)
-    Container UID 1 → Host UID 100001
+  User Namespace (range da /etc/subuid, /etc/subgid):
+    Container UID 0 (root) → Host UID 1000 (bob stesso!)
+    Container UID 1        → Host UID 100000 (primo subUID di bob)
+    Container UID 2        → Host UID 100001
     ...
 
-  /proc/<container-pid>/uid_map:
-  0  100000  65536
+  /proc/<pid-dockerd>/uid_map:
+  0     1000      1
+  1  100000  65536
 
   Limitazioni rootless:
   - No binding su porte < 1024 (workaround: sysctl net.ipv4.ip_unprivileged_port_start=80)
-  - Overlay2 può richiedere fuse-overlayfs su alcuni sistemi
+  - Overlay2 nativo richiede kernel recente (>= 5.11); su kernel più vecchi serve fuse-overlayfs
   - No macvlan / ipvlan (richiedono CAP_NET_ADMIN sull'host)
-  - Performance I/O leggermente inferiore con fuse-overlayfs
+  - Rete in user-space (RootlessKit + slirp4netns/pasta): throughput inferiore al bridge rootful
 ```
+
+!!! note "Perché il root del container è l'utente stesso"
+    In rootless, `newuidmap` mappa l'UID 0 del namespace sull'UID reale dell'utente: un container escape ottiene solo i privilegi di `bob`, non di root. Con `userns-remap` (rootful) il daemon resta root, ma il root dei container è mappato su un range subUID senza privilegi.
 
 **UID Remapping (rootful Docker con user namespaces):**
 
 ```json
-// /etc/docker/daemon.json
 {
-  "userns-remap": "default",
-  // oppure: "userns-remap": "bob" per mappare al UID di bob
-  // "default" crea automaticamente un utente "dockremap"
+  "userns-remap": "default"
 }
 ```
+
+`/etc/docker/daemon.json` — `"default"` crea automaticamente l'utente `dockremap` (e le righe in `/etc/subuid`/`/etc/subgid`); in alternativa `"userns-remap": "bob"`. JSON non ammette commenti. Nota: `userns-remap` è incompatibile con `--privileged` senza `--userns=host` e con alcune funzioni (es. `--pid=host`).
 
 ---
 
@@ -130,10 +135,12 @@ DAC_READ_SEARCH ← leggere qualsiasi file ignorando permessi
 
 ```bash
 # Hardening: drop tutte le capabilities, aggiungi solo quelle necessarie
+# NET_BIND_SERVICE solo se l'app ascolta su porta < 1024;
+# no-new-privileges impedisce escalation via setuid/file capabilities
 docker run \
     --cap-drop ALL \
-    --cap-add NET_BIND_SERVICE \    # se l'app ascolta su porta < 1024
-    --security-opt no-new-privileges:true \  # impedisce escalation
+    --cap-add NET_BIND_SERVICE \
+    --security-opt no-new-privileges:true \
     nginx
 
 # Verifica capabilities di un container
@@ -160,8 +167,9 @@ docker run \
 
 **Seccomp** (Secure Computing Mode) usa BPF per filtrare le syscall che un container può chiamare. Docker applica un profilo seccomp di default che blocca ~44 syscall pericolose.
 
+Esempio **illustrativo** di profilo allowlist (rimuovere i commenti `//` prima dell'uso: JSON non li ammette). Questa lista è troppo corta per un container reale: `runc` stesso ha bisogno di syscall (`prctl`, `setns`, `pivot_root`, `clone3`, `futex`...) e un runtime come Go/Java ne usa molte altre. Partire dal profilo default di Docker (`moby/profiles/seccomp/default.json`) e rimuovere/aggiungere, oppure generare la lista tracciando l'app.
+
 ```json
-// Profilo seccomp custom — principio allowlist
 {
   "defaultAction": "SCMP_ACT_ERRNO",      // blocca tutto per default
   "architectures": ["SCMP_ARCH_X86_64"],
@@ -268,13 +276,34 @@ docker run \
     mywebapp
 
 # Profilo default Docker (docker-default)
+# (è il default se AppArmor è attivo sull'host)
 docker run \
-    --security-opt apparmor=docker-default \  # questo è il default
+    --security-opt apparmor=docker-default \
     mywebapp
 
 # Verifica AppArmor status
 aa-status | grep docker
 cat /proc/<container-pid>/attr/current  # profilo AppArmor attivo
+```
+
+---
+
+## SELinux — MAC su RHEL/Fedora
+
+Sulle distro Red Hat-like (RHEL, Fedora, Rocky) il MAC è **SELinux**, non AppArmor. Con `"selinux-enabled": true` in `daemon.json` ogni container gira con il tipo `container_t` e un'etichetta MCS (Multi-Category Security) univoca: i container non possono leggere i file l'uno dell'altro né quelli dell'host non etichettati per container.
+
+```bash
+# Bind mount: rietichetta il path per il container
+#   :z = etichetta condivisa tra più container
+#   :Z = etichetta privata a questo container
+docker run -v /srv/data:/data:Z myapp
+
+# Non usare :Z su /home, /etc, /usr: rietichetta davvero l'host e può romperlo
+
+# Diagnostica: denial SELinux
+sudo ausearch -m AVC -ts recent
+# Disabilitare SELinux per un singolo container — solo debug
+docker run --security-opt label=disable myapp
 ```
 
 ---
@@ -293,15 +322,19 @@ docker run -v /var/run/docker.sock:/var/run/docker.sock hacker-image
 
 # Limitazioni Docker socket:
 # - Non montare mai /var/run/docker.sock in container non fidati
-# - Per CI/CD: usare Docker-in-Docker (dind) isolato o Kaniko
-# - Per monitoring: usare socket Unix con proxy (docker-socket-proxy)
+# - Stessa regola per l'appartenenza al gruppo `docker` sull'host: equivale a root
+# - Per CI/CD: build senza daemon root (BuildKit rootless, Buildah) o dind isolato
+#   (dind richiede --privileged: va confinato in runner effimeri/VM dedicate)
+# - Per monitoring: usare un proxy che filtra l'API (docker-socket-proxy)
 
 # docker-socket-proxy (esposizione limitata del socket)
+# CONTAINERS=1 permette GET /containers; EXEC=0 nega docker exec; SERVICES=0 nega Swarm
+# Il proxy NON va pubblicato su interfacce esposte: terzi lo userebbero come API Docker
 docker run -d \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -e CONTAINERS=1 \         # permette GET /containers
-    -e SERVICES=0 \           # nega servizi Swarm
-    -e EXEC=0 \               # nega docker exec
+    -e CONTAINERS=1 \
+    -e SERVICES=0 \
+    -e EXEC=0 \
     tecnativa/docker-socket-proxy
 ```
 
@@ -321,12 +354,17 @@ docker run --privileged myimage
 # Invece di --privileged per montare un filesystem:
 docker run --cap-add SYS_ADMIN --device /dev/fuse myapp
 
-# runc CVE-2019-5736 (esempio historical exploit):
+# runc CVE-2019-5736 (esempio storico):
 # Overwrite del binario runc dall'interno di un container
-# → Patch: runc 1.0.0-rc8+, Docker 18.09.2+
-# Meccanismo: /proc/self/exe del container punta al runc binary
-# Mitigazione: read-only filesystem, no-new-privileges
+# → Patch: Docker 18.09.2+ (runc rc6+)
+# Meccanismo: /proc/self/exe del processo runc punta al binario runc sull'host;
+#   un processo malevolo nel container lo riapre in scrittura mentre runc fa exec
+# Mitigazione reale: aggiornare runc; user namespaces/rootless (il container non è root host);
+#   SELinux. read-only fs e no-new-privileges NON bastano.
 ```
+
+!!! warning "Le CVE di runc continuano ad arrivare"
+    Il pattern ricorre: **CVE-2024-21626** ("Leaky Vessels", fd della directory host trapelato nel container, fix runc 1.1.12) e tre CVE di fine 2025 (CVE-2025-31133, CVE-2025-52565, CVE-2025-52881, abuso di mount/`/proc` durante la creazione del container). Il confine container non è un confine di sicurezza duro: tenere aggiornati `runc`/`containerd`/Docker Engine e, per workload non fidati, valutare sandbox più forti (gVisor, Kata Containers).
 
 ---
 
@@ -345,10 +383,10 @@ docker run -it --net host --pid host --userns host --cap-add audit_control \
     --label docker_bench_security \
     docker/docker-bench-security
 
-# Output colorato:
-# [PASS] 2.1 Ensure the container host has been Hardened
-# [WARN] 2.2 Ensure that the Docker daemon is running as a non-root user
-# [INFO] 4.1 Ensure that a user for the container has been created
+# Output (esempio):
+# [PASS] 5.4  - Ensure that privileged containers are not used
+# [WARN] 4.1  - Ensure that a user for the container has been created
+# [WARN] 5.31 - Ensure that the Docker socket is not mounted inside any containers
 ```
 
 ---
@@ -417,10 +455,12 @@ services:
 **Soluzione:**
 
 ```bash
-# Identifica quale capability manca con strace
-docker run --rm --cap-drop ALL \
-    --security-opt seccomp=unconfined \   # elimina seccomp dalla diagnostica
-    myapp 2>&1 | grep -i "not permitted\|EPERM"
+# Identifica la syscall che fallisce con EPERM (seccomp=unconfined esclude seccomp dalla diagnostica;
+# SYS_PTRACE serve a strace dentro il container; l'immagine deve contenere strace)
+docker run --rm --cap-drop ALL --cap-add SYS_PTRACE \
+    --security-opt seccomp=unconfined \
+    myapp strace -f -e trace=all -o /dev/stderr myapp-binary 2>&1 | grep EPERM
+# Poi mappare la syscall alla capability (man 7 capabilities): es. chown → CHOWN, bind <1024 → NET_BIND_SERVICE
 
 # Oppure avvia temporaneamente con cap-drop ALL e aggiungi una alla volta
 docker run --rm \
@@ -440,7 +480,7 @@ docker run --rm --cap-drop ALL ubuntu capsh --print
 
 **Sintomo:** Con rootless Docker, il container non riesce a fare binding su porte < 1024 (80, 443). Errore: `bind: permission denied`.
 
-**Causa:** In modalità rootless, il processo non ha `CAP_NET_BIND_SERVICE` sull'host, quindi le porte privilegiate sono inaccessibili.
+**Causa:** In modalità rootless il `bind()` sulla porta pubblicata lo esegue RootlessKit come utente normale sull'host, che non può aprire porte < 1024 (`ip_unprivileged_port_start` = 1024). Capabilities dentro il container (o `setcap` nell'immagine) non cambiano nulla.
 
 **Soluzione:**
 
@@ -455,10 +495,6 @@ sudo sysctl --system
 docker run -p 8080:8080 mywebapp
 # poi nginx/traefik su host fa forward da 80 → 8080
 
-# Opzione 3: setcap sul binario dell'app nell'immagine
-# Nel Dockerfile:
-# RUN setcap cap_net_bind_service=+ep /usr/local/bin/myapp
-
 # Verifica configurazione rootless
 dockerd-rootless-setuptool.sh check
 ```
@@ -467,9 +503,9 @@ dockerd-rootless-setuptool.sh check
 
 ### Scenario 3 — Seccomp blocca syscall e il container crasha silenziosamente
 
-**Sintomo:** Container si avvia e muore subito senza messaggi di errore chiari. I log mostrano `Killed` o exit code 159 (SIGSYS).
+**Sintomo:** Container si avvia e muore subito senza messaggi di errore chiari, oppure l'app riporta `EPERM`/`Operation not permitted` su una syscall specifica.
 
-**Causa:** Il profilo seccomp (default o custom) blocca una syscall usata dall'applicazione. Exit code 159 = SIGSYS = syscall non permessa.
+**Causa:** Il profilo seccomp (default o custom) blocca una syscall usata dall'applicazione. Con `SCMP_ACT_ERRNO` (default Docker) la syscall fallisce con `EPERM`; solo con azioni `SCMP_ACT_KILL*`/`TRAP` il processo muore con SIGSYS (exit code 159 = 128+31).
 
 **Soluzione:**
 
@@ -480,8 +516,7 @@ docker run --security-opt seccomp=unconfined myapp
 
 # Identifica le syscall usate dall'applicazione con strace
 docker run --security-opt seccomp=unconfined --cap-add SYS_PTRACE \
-    --rm myapp strace -f -e trace=all myapp-binary 2>&1 | \
-    awk -F'(' '{print $1}' | sort | uniq > /tmp/syscalls-used.txt
+    --rm myapp strace -f -c myapp-binary   # -c: riepilogo delle syscall usate
 
 # Confronta con il profilo seccomp attuale e aggiungi le syscall mancanti
 # Syscall comuni mancanti in profili custom:
