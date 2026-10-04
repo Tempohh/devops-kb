@@ -7,9 +7,10 @@ search_keywords: [harbor registry, harbor proxy cache, harbor replication, harbo
 parent: containers/registry/_index
 related: [containers/registry/_index, security/supply-chain/image-scanning, security/supply-chain/sbom-cosign, containers/kubernetes/sicurezza]
 official_docs: https://goharbor.io/docs/
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Harbor — Enterprise Registry
@@ -34,11 +35,19 @@ Harbor Component Architecture
   │  └──────────┘  └──────────┘  └──────────────────────┘  │
   │                                                         │
   │  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
-  │  │  Trivy   │  │  Notary  │  │   Proxy (nginx)       │  │
-  │  │ (scanner)│  │  (trust) │  │   (TLS termination)   │  │
+  │  │  Trivy   │  │ Exporter │  │   Proxy (nginx)       │  │
+  │  │ (scanner)│  │ (metrics)│  │   (TLS termination)   │  │
   │  └──────────┘  └──────────┘  └──────────────────────┘  │
   └─────────────────────────────────────────────────────────┘
 ```
+
+!!! note "Notary rimosso"
+    Notary v1 (Docker Content Trust) è stato deprecato e rimosso da Harbor a partire dalla v2.8. La firma delle immagini si fa oggi con **Cosign** o **Notation**: le signature sono salvate nel registry come normali artifact OCI (accessori), senza un componente dedicato.
+
+!!! warning "Convenzioni degli esempi API"
+    - Gli esempi usano `admin:Harbor12345` (password di default): **va cambiata subito** e in produzione sostituita con robot account / OIDC.
+    - I commenti `# ...` dentro i payload JSON servono a spiegare i campi: JSON non li ammette, vanno rimossi prima di eseguire il `curl`.
+    - Nei path API un nome di repository che contiene `/` va codificato **due volte** (`myapp/api` → `myapp%252Fapi`).
 
 **Deploy con Helm (raccomandato per Kubernetes):**
 
@@ -65,7 +74,9 @@ expose:
 
 externalURL: https://registry.company.com
 
-harborAdminPassword: "changeme-use-secret"
+# Password admin da Secret preesistente (chiave: HARBOR_ADMIN_PASSWORD), non in chiaro nei values
+existingSecretAdminPassword: harbor-admin-secret
+existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
 
 persistence:
   enabled: true
@@ -107,9 +118,12 @@ helm upgrade --install harbor harbor/harbor \
     --namespace harbor \
     --create-namespace \
     --values values-harbor.yaml \
-    --version 1.14.0 \
+    --version "$HARBOR_CHART_VERSION" \
     --wait --timeout 10m
 ```
+
+!!! tip "Versione chart"
+    Fissare sempre `--version` (la versione del chart Helm non coincide con quella di Harbor: es. chart 1.14 → Harbor 2.10). Cercare la corrente con `helm search repo harbor/harbor --versions | head`. Per HA reale servono `database.type: external` (PostgreSQL gestito), `redis.type: external`, storage oggetti (S3/GCS) al posto del PVC `registry` e `replicas > 1` su core/registry/portal/jobservice.
 
 ---
 
@@ -126,7 +140,7 @@ curl -s -u "admin:Harbor12345" \
         "project_name": "myteam",
         "metadata": {
             "public": "false",
-            "enable_content_trust": "true",      # richiede firma cosign
+            "enable_content_trust_cosign": "true", # pull solo di immagini firmate con cosign
             "prevent_vul": "true",               # blocca pull con CVE critical
             "severity": "critical",              # soglia CVE
             "auto_scan": "true",                 # scan automatico al push
@@ -140,10 +154,11 @@ curl -s -u "admin:Harbor12345" \
     -X POST "https://registry.company.com/api/v2.0/projects/myteam/members" \
     -H "Content-Type: application/json" \
     -d '{
-        "role_id": 2,                            # 1=admin, 2=developer, 3=guest, 4=maintainer
+        "role_id": 2,                            # 1=admin, 2=developer, 3=guest, 4=maintainer, 5=limited guest
         "member_group": {
-            "group_name": "cn=devs,ou=groups,dc=company,dc=com",
-            "group_type": 1                      # 1=LDAP
+            "group_name": "devs",
+            "ldap_group_dn": "cn=devs,ou=groups,dc=company,dc=com",
+            "group_type": 1                      # 1=LDAP, 2=HTTP, 3=OIDC
         }
     }'
 ```
@@ -185,21 +200,22 @@ curl -s -u "admin:Harbor12345" \
             }
         ]
     }'
-# Risposta: {"name":"robot$ci-pipeline","secret":"xxxx..."}
+# Risposta: {"name":"robot$myteam+ci-pipeline","secret":"xxxx..."}
+# Il nome completo include il prefisso del project: robot$<project>+<name>
 
 # Robot con push access (per CI build)
 # access: pull + push + delete (per cleanup)
-# Conservare il secret: non è recuperabile in seguito
+# Conservare il secret: non è recuperabile in seguito (solo rigenerabile)
 
 # Uso in Docker login
 docker login registry.company.com \
-    -u "robot\$ci-pipeline" \
+    -u 'robot$myteam+ci-pipeline' \
     -p "secret-from-creation"
 
 # In Kubernetes Secret per imagePullSecrets
 kubectl create secret docker-registry harbor-robot \
     --docker-server=registry.company.com \
-    --docker-username='robot$ci-pipeline' \
+    --docker-username='robot$myteam+ci-pipeline' \
     --docker-password='secret-from-creation' \
     -n myapp
 ```
@@ -239,10 +255,11 @@ curl -s -u "admin:Harbor12345" \
 
 # 3. Pull trasparente attraverso Harbor
 # Invece di: docker pull nginx:1.25
-docker pull registry.company.com/docker-hub/nginx:1.25
+# (le immagini "ufficiali" di Docker Hub stanno nel namespace library/)
+docker pull registry.company.com/docker-hub/library/nginx:1.25
 # Harbor → controlla cache → cache miss → pull da Docker Hub → conserva localmente
 
-# Stessa cosa per altri registri:
+# Stessa cosa per altri registri (il nome del project lo scegli tu, 1 project = 1 endpoint):
 # quay.io    → registry.company.com/quay-io/<image>
 # gcr.io     → registry.company.com/gcr/<image>
 # ghcr.io    → registry.company.com/ghcr/<image>
@@ -252,9 +269,12 @@ docker pull registry.company.com/docker-hub/nginx:1.25
 **Cache invalidation e refresh:**
 
 ```bash
-# Harbor non ha TTL configurabile sull'immagine cachata.
-# Refresh manuale: eliminare l'artifact dal proxy cache project
-# Harbor rifarà il pull al prossimo utilizzo.
+# Non c'è un TTL configurabile. A ogni pull Harbor fa una HEAD sul manifest upstream:
+#  - digest cambiato (es. tag mutabile come :latest) → scarica la nuova versione
+#  - upstream irraggiungibile → serve la copia in cache
+# La HEAD non conta nel rate limit di Docker Hub, quindi il proxy cache riduce
+# il rischio di "429 Too Many Requests" in cluster con molti nodi.
+# Per forzare un refresh: eliminare l'artifact dal proxy cache project.
 
 # Verificare se un'immagine è in cache
 curl -s -u "admin:Harbor12345" \
@@ -340,20 +360,21 @@ Harbor → Cloud Registry:
 ```bash
 # Trigger scan manuale su artifact specifico
 curl -s -u "admin:Harbor12345" \
-    -X POST "https://registry.company.com/api/v2.0/projects/myteam/repositories/myapp%2Fapi/artifacts/sha256:abc123/scan"
+    -X POST "https://registry.company.com/api/v2.0/projects/myteam/repositories/myapp%252Fapi/artifacts/sha256:abc123/scan"
 
 # Get scan report
 curl -s -u "admin:Harbor12345" \
-    "https://registry.company.com/api/v2.0/projects/myteam/repositories/myapp%2Fapi/artifacts/sha256:abc123/additions/vulnerabilities" \
+    "https://registry.company.com/api/v2.0/projects/myteam/repositories/myapp%252Fapi/artifacts/sha256:abc123/additions/vulnerabilities" \
     | jq '.["application/vnd.security.vulnerability.report; version=1.1"].vulnerabilities
           | group_by(.severity) | map({severity: .[0].severity, count: length})'
 # Output: [{"severity":"Critical","count":2},{"severity":"High","count":8}]
 
-# Scan all artifacts in a project
+# Scan all artifacts (system-wide), schedulata ogni notte:
+# serve a rilevare CVE pubblicate DOPO il push di immagini già nel registry
 curl -s -u "admin:Harbor12345" \
     -X POST "https://registry.company.com/api/v2.0/system/scanAll/schedule" \
     -H "Content-Type: application/json" \
-    -d '{"schedule": {"type": "Hourly", "cron": "0 0 * * * *"}}'
+    -d '{"schedule": {"type": "Custom", "cron": "0 0 1 * * *"}}'
 
 # Allowlist CVE per progetto (eccezioni motivate)
 curl -s -u "admin:Harbor12345" \
@@ -366,7 +387,7 @@ curl -s -u "admin:Harbor12345" \
                 {"cve_id": "CVE-2023-12345"},   # accepted risk, workaround applied
                 {"cve_id": "CVE-2023-67890"}
             ],
-            "expires_at": 1735689600            # expiry Unix timestamp
+            "expires_at": 1798761600            # expiry Unix timestamp (2027-01-01): oltre, l'eccezione decade
         }
     }'
 ```
@@ -376,10 +397,12 @@ curl -s -u "admin:Harbor12345" \
 ## Cosign Image Signing Policy
 
 ```bash
-# Abilitare Content Trust su un project
-# Project → Configuration → Content Trust → Enable
+# Abilitare l'enforcement su un project:
+# Project → Configuration → Deployment security → "Cosign" (enable_content_trust_cosign)
+# (l'opzione "Content Trust" legacy era basata su Notary, rimosso dalla v2.8)
 
 # Cosign: firma un'immagine e il signature viene conservato nel registry
+# come artifact OCI accessorio (tag sha256-<digest>.sig / referrer)
 # Harbor mostra il badge "Signed" nella UI
 
 # Firma un'immagine (keyless con Sigstore OIDC):
@@ -407,7 +430,9 @@ cosign verify \
     registry.company.com/myteam/myapp:1.0.0
 
 # Kubernetes: Kyverno policy per verificare firma
-# (Harbor blocca pull se content_trust=true e immagine non firmata)
+# (Harbor blocca il pull se enable_content_trust_cosign=true e l'immagine non è firmata;
+#  Harbor controlla solo la PRESENZA di una signature, non identità/issuer:
+#  quella verifica resta a cosign verify in pipeline o a Kyverno/policy-controller nel cluster)
 ```
 
 ---
@@ -420,10 +445,12 @@ curl -s -u "admin:Harbor12345" \
     -X POST "https://registry.company.com/api/v2.0/projects/myteam/immutabletagrules" \
     -H "Content-Type: application/json" \
     -d '{
-        "selector": {
-            "kind": "doublestar",
-            "decoration": "repoMatches",
-            "pattern": "**"           # tutti i repository nel project
+        "scope_selectors": {
+            "repository": [{
+                "kind": "doublestar",
+                "decoration": "repoMatches",
+                "pattern": "**"       # tutti i repository nel project
+            }]
         },
         "tag_selectors": [{
             "kind": "doublestar",
@@ -442,10 +469,13 @@ curl -s -u "admin:Harbor12345" \
 
 ## Tag Retention — Garbage Collection
 
+Due meccanismi distinti e da concatenare: la **Retention** rimuove tag/artifact secondo regole (non libera ancora spazio su disco); la **Garbage Collection** elimina poi i blob non più referenziati e libera lo storage.
+
 ```bash
 # Retention Policy: mantieni solo ultimi 10 artifact con tag v*
+# (ref = ID numerico del project, da GET /projects/myteam)
 curl -s -u "admin:Harbor12345" \
-    -X POST "https://registry.company.com/api/v2.0/projects/myteam/retention" \
+    -X POST "https://registry.company.com/api/v2.0/retentions" \
     -H "Content-Type: application/json" \
     -d '{
         "algorithm": "or",
@@ -481,8 +511,9 @@ curl -s -u "admin:Harbor12345" \
     }'
 
 # Garbage Collection — elimina i blob non referenziati
-# IMPORTANTE: Harbor blocca push/pull durante GC
-# Schedulare in orari di bassa attività
+# Dalla v2.1 la GC è non-blocking (push/pull restano possibili); nelle versioni
+# precedenti il registry andava in sola lettura. Schedulare comunque off-peak:
+# la GC genera I/O intenso sullo storage.
 
 curl -s -u "admin:Harbor12345" \
     -X POST "https://registry.company.com/api/v2.0/system/gc/schedule" \
@@ -535,7 +566,7 @@ curl -s -u "admin:Harbor12345" \
 
 # Test LDAP user search
 curl -s -u "admin:Harbor12345" \
-    -X POST "https://registry.company.com/api/v2.0/ldap/users/search?username=johndoe"
+    -X GET "https://registry.company.com/api/v2.0/ldap/users/search?username=johndoe"
 ```
 
 ```yaml
@@ -552,6 +583,9 @@ curl -s -u "admin:Harbor12345" \
 # oidc_auto_onboard: true             # crea utente Harbor al primo login
 # oidc_user_claim: "email"            # attributo JWT per username
 ```
+
+!!! warning "OIDC e client Docker"
+    Con `auth_mode: oidc_auth` `docker login` con la password SSO **non funziona**: l'utente usa il **CLI secret** (profilo utente nella UI), mentre le pipeline devono usare robot account. Inoltre `auth_mode` non è modificabile una volta che esistono utenti non-admin locali.
 
 ---
 
@@ -588,7 +622,7 @@ curl -s -u "admin:Harbor12345" \
 # {
 #   "type": "PUSH_ARTIFACT",
 #   "occur_at": 1700000000,
-#   "operator": "robot$ci-pipeline",
+#   "operator": "robot$myteam+ci-pipeline",
 #   "event_data": {
 #     "resources": [{
 #       "resource_url": "registry.company.com/myteam/myapp:v1.0.0",
@@ -612,6 +646,8 @@ curl -s -u "admin:Harbor12345" \
 
 ```bash
 # Quota su project (storage e artifact count)
+# L'ID quota NON è l'ID project: ricavarlo con
+#   curl -s -u admin:... "https://registry.company.com/api/v2.0/quotas?reference=project&reference_id=<project_id>" | jq '.[].id'
 curl -s -u "admin:Harbor12345" \
     -X PUT "https://registry.company.com/api/v2.0/quotas/1" \
     -H "Content-Type: application/json" \
@@ -648,18 +684,21 @@ kubectl logs -n harbor deployment/harbor-core --tail=50
 kubectl logs -n harbor deployment/harbor-jobservice --tail=50
 
 # Backup database Harbor (PostgreSQL interno)
-kubectl exec -n harbor deploy/harbor-database -- \
+# (il database interno è uno StatefulSet, non un Deployment)
+kubectl exec -n harbor statefulset/harbor-database -- \
     pg_dump -U postgres registry > harbor-db-backup-$(date +%Y%m%d).sql
+# Il dump copre solo metadati (project, RBAC, policy): i blob stanno nel PVC/bucket
+# `registry` e vanno salvati a parte (snapshot volume / versioning del bucket).
 
 # Restore
-kubectl exec -i -n harbor deploy/harbor-database -- \
+kubectl exec -i -n harbor statefulset/harbor-database -- \
     psql -U postgres registry < harbor-db-backup-20260225.sql
 
-# Upgrade Harbor via Helm
+# Upgrade Harbor via Helm: un minor alla volta, dopo backup DB, leggendo le release notes
 helm upgrade harbor harbor/harbor \
     --namespace harbor \
     --values values-harbor.yaml \
-    --version 1.15.0 \
+    --version "$HARBOR_NEXT_CHART_VERSION" \
     --wait --timeout 15m
 
 # Harbor storage usage
@@ -693,7 +732,9 @@ curl -s "https://registry.company.com/api/v2.0/health" \
 kubectl logs -n harbor deployment/harbor-core --tail=100
 
 # Errore tipico: "failed to ping db" → verificare credenziali database
-kubectl get secret -n harbor harbor-harbor-core -o jsonpath='{.data.secret}' | base64 -d
+# (con release "harbor"; per DB esterno: Secret/values con la password configurata)
+kubectl get secret -n harbor harbor-database -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d
+kubectl logs -n harbor statefulset/harbor-database --tail=50
 
 # Verificare che il PVC database sia Bound
 kubectl get pvc -n harbor
@@ -732,18 +773,18 @@ openssl s_client -connect registry.company.com:443 -servername registry.company.
 kubectl delete secret harbor-robot -n myapp
 kubectl create secret docker-registry harbor-robot \
     --docker-server=registry.company.com \
-    --docker-username='robot$ci-pipeline' \
+    --docker-username='robot$myteam+ci-pipeline' \
     --docker-password='new-secret' \
     -n myapp
 ```
 
 ---
 
-### Scenario 3 — Garbage Collection blocca push/pull in produzione
+### Scenario 3 — Garbage Collection degrada push/pull in produzione
 
-**Sintomo:** Durante l'esecuzione della GC, tutti i push e pull verso Harbor falliscono con errori di timeout o `503 Service Unavailable`.
+**Sintomo:** Durante la GC push e pull rallentano o falliscono con timeout / `503 Service Unavailable`.
 
-**Causa:** Harbor mette in sola lettura il registry durante la GC. Se la GC è programmata in orario di punta, impatta il traffico produzione.
+**Causa:** Dalla v2.1 la GC è non-blocking, ma su storage con molti blob genera I/O intenso e può saturare registry/jobservice. Su Harbor < 2.1 il registry veniva messo in sola lettura per tutta la durata. In entrambi i casi la GC in orario di punta impatta il traffico produzione.
 
 **Soluzione:**
 ```bash
@@ -752,8 +793,8 @@ curl -s -u "admin:Harbor12345" \
     "https://registry.company.com/api/v2.0/system/gc?page=1&page_size=5" \
     | jq '.[] | {id, status, creation_time, update_time}'
 
-# Interrompere una GC in esecuzione (se possibile)
-# Non esiste API di stop diretto — attendere il completamento o riavviare jobservice
+# Interrompere una GC in esecuzione: ultima risorsa, riavviare jobservice
+# (verificare nello swagger della propria versione se esiste lo stop del job)
 kubectl rollout restart deployment/harbor-jobservice -n harbor
 
 # Riprogrammare GC in orario off-peak (domenica 3:00)
@@ -775,7 +816,9 @@ curl -s -u "admin:Harbor12345" \
 
 **Sintomo:** Le replication policy mostrano status `Success` ma le immagini non arrivano su ECR, oppure lo stato è `Failed` senza messaggi chiari.
 
-**Causa:** Credenziali ECR scadute (i token AWS durano 12h), endpoint ECR non raggiungibile dalla rete Harbor, oppure filtri della policy troppo restrittivi.
+**Causa:** Endpoint registrato come registry generico con token `get-login-password` (scade dopo 12h), endpoint ECR non raggiungibile dalla rete Harbor, oppure filtri della policy troppo restrittivi.
+
+**Fix strutturale:** registrare l'endpoint con `"type": "aws-ecr"` e un'access key/secret IAM (permessi ECR push) invece del token temporaneo: l'adapter Harbor ottiene e rinnova da solo i token ECR, quindi non c'è nulla da ruotare ogni 12h.
 
 **Soluzione:**
 ```bash
@@ -799,13 +842,24 @@ curl -s -u "admin:Harbor12345" \
 curl -s -u "admin:Harbor12345" \
     -X POST "https://registry.company.com/api/v2.0/registries/2/info"
 
-# Rinnovare credenziali ECR (token 12h): aggiornare l'endpoint con nuova password
-aws ecr get-login-password --region eu-west-1 | \
-    curl -s -u "admin:Harbor12345" \
-        -X PUT "https://registry.company.com/api/v2.0/registries/2" \
-        -H "Content-Type: application/json" \
-        -d "{\"credential\": {\"access_key\": \"AWS\", \"access_secret\": \"$(cat -)\"}}"
+# Workaround con endpoint generico: rinnovare il token 12h
+curl -s -u "admin:Harbor12345" \
+    -X PUT "https://registry.company.com/api/v2.0/registries/2" \
+    -H "Content-Type: application/json" \
+    -d "{\"credential\": {\"type\": \"basic\", \"access_key\": \"AWS\", \"access_secret\": \"$(aws ecr get-login-password --region eu-west-1)\"}}"
 ```
+
+---
+
+## Best Practices
+
+- **Un project per team/ambiente**, accesso via gruppi OIDC/LDAP; admin Harbor ridotti al minimo.
+- **Robot account per ogni pipeline**, con scope minimo e scadenza (`duration`), mai l'utente admin.
+- **Proxy cache davanti ai registry pubblici**: elimina i rate limit di Docker Hub e riduce la superficie supply-chain (insieme a scan + `prevent_vul`).
+- **Immutable tags sui tag di release** (`v*`) e retention per non far crescere lo storage all'infinito; GC schedulata dopo la retention.
+- **Scan on push + scanAll notturno**: le CVE nuove escono dopo il push.
+- **Backup**: DB (metadati) + storage blob; provare il restore.
+- **HA**: DB e Redis esterni, storage oggetti, repliche multiple; upgrade un minor alla volta.
 
 ---
 
