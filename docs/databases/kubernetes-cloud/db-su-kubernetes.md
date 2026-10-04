@@ -7,7 +7,7 @@ search_keywords: [database kubernetes, statefulset postgresql, persistent volume
 parent: databases/kubernetes-cloud/_index
 related: [databases/postgresql/connection-pooling, databases/replicazione-ha/backup-pitr, databases/postgresql/replicazione]
 official_docs: https://cloudnative-pg.io/documentation/
-status: needs-review
+status: reviewed
 difficulty: advanced
 last_updated: 2026-10-04
 last_verified: 2026-10-04
@@ -215,23 +215,13 @@ spec:
     size: 20Gi
     storageClass: gp3
 
-  # Backup su S3 via WAL archiving
-  # <!-- REVIEW: verificare -->: `barmanObjectStore` in-tree risulta deprecato dalle release CNPG recenti
-  # in favore del Barman Cloud Plugin (CRD ObjectStore + `plugins:` nel Cluster); controllare la versione in uso
-  backup:
-    retentionPolicy: "30d"
-    barmanObjectStore:
-      destinationPath: "s3://my-cnpg-backups/postgres-cluster"
-      s3Credentials:
-        accessKeyId:
-          name: s3-credentials
-          key: ACCESS_KEY_ID
-        secretAccessKey:
-          name: s3-credentials
-          key: SECRET_ACCESS_KEY
-      wal:
-        compression: brotli
-        maxParallel: 4
+  # Backup su S3 via WAL archiving: Barman Cloud Plugin (ObjectStore sotto).
+  # Il campo in-tree `backup.barmanObjectStore` è deprecato dalla v1.26 (funziona ancora per retrocompatibilità)
+  plugins:
+  - name: barman-cloud.cloudnative-pg.io
+    isWALArchiver: true
+    parameters:
+      barmanObjectName: s3-store
 
   # Monitoring con Prometheus
   monitoring:
@@ -250,6 +240,33 @@ spec:
     enablePodAntiAffinity: true   # Distribuisce pod su nodi fisici diversi
     topologyKey: kubernetes.io/hostname
 ```
+
+Il Barman Cloud Plugin si installa a parte (richiede cert-manager); la destinazione del backup è una risorsa `ObjectStore`:
+
+```yaml
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: s3-store
+  namespace: databases
+spec:
+  retentionPolicy: "30d"
+  configuration:
+    destinationPath: "s3://my-cnpg-backups/postgres-cluster"
+    s3Credentials:
+      accessKeyId:
+        name: s3-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: s3-credentials
+        key: SECRET_ACCESS_KEY
+    wal:
+      compression: gzip
+      maxParallel: 4
+```
+
+!!! note "Migrazione da `barmanObjectStore` in-tree"
+    Il metodo in-tree è deprecato dalla v1.26 ma resta il default per retrocompatibilità; per nuovi cluster usare il plugin. Dettagli: [Barman Cloud Plugin](https://cloudnative-pg.io/plugin-barman-cloud/docs/usage/).
 
 ### Service e Connessione con CNPG
 
@@ -277,9 +294,11 @@ kind: Backup
 metadata:
   name: postgres-backup-20240115
 spec:
-  method: barmanObjectStore
+  method: plugin
   cluster:
     name: postgres-cluster
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
 
 ---
 # Restore a punto nel tempo (PITR) — crea un nuovo cluster
@@ -296,9 +315,11 @@ spec:
         targetTime: "2024-01-15T14:31:59+00:00"
   externalClusters:
   - name: postgres-cluster-backup
-    barmanObjectStore:
-      destinationPath: "s3://my-cnpg-backups/postgres-cluster"
-      s3Credentials: ...
+    plugin:
+      name: barman-cloud.cloudnative-pg.io
+      parameters:
+        barmanObjectName: s3-store
+        serverName: postgres-cluster
 ```
 
 ### Operazioni con kubectl e plugin CNPG
