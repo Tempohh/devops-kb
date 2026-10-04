@@ -7,9 +7,9 @@ search_keywords: [GCP shared responsibility model, responsabilità condivisa GCP
 parent: cloud/gcp/fondamentali/_index
 related: [cloud/gcp/fondamentali/panoramica, cloud/aws/fondamentali/shared-responsibility, cloud/azure/fondamentali/shared-responsibility]
 official_docs: https://cloud.google.com/architecture/framework/security/shared-responsibility
-status: needs-review
+status: reviewed
 difficulty: beginner
-last_updated: 2026-03-29
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -265,10 +265,19 @@ gcloud compute disks create my-disk \
 
 **Security Command Center (SCC)** è lo strumento centralizzato di GCP per monitorare il posture di sicurezza e rilevare misconfigurazioni — il cliente è responsabile di abilitarlo e agire sui findings.
 
+!!! note "Tier SCC e API v1/v2"
+    Tier attuali: **Standard** (gratuito, posture base solo Google Cloud), **Premium** (pay-as-you-go o subscription, attack path, threat detection, multicloud AWS/Azure) ed **Enterprise** (CNAPP multicloud, deprecato: shutdown 21/05/2027, migrazione automatica a Premium). Il tier Standard-Legacy non è più attivabile da nuove organizzazioni. Nel comando `gcloud scc findings list`, `--location` ha default `global` e, se omesso, la richiesta va all'API **v1**; per usare l'API **v2** specificare `--location` esplicitamente. `--source` ha default `-` (tutte le sorgenti).
+
 ```bash
 # Listare i security findings attivi nel progetto
 gcloud scc findings list \
     --organization=ORGANIZATION_ID \
+    --filter="state=ACTIVE AND severity=HIGH"
+
+# Stessa query via API v2 (location esplicita)
+gcloud scc findings list \
+    --organization=ORGANIZATION_ID \
+    --location=global \
     --filter="state=ACTIVE AND severity=HIGH"
 
 # Listare le misconfigurazioni rilevate da Security Health Analytics
@@ -391,7 +400,7 @@ gcloud org-policies describe constraints/gcp.resourceLocations \
 !!! warning "Cloud Storage: bloccare l'accesso pubblico per default"
     Contrariamente ad S3 (dove il blocco pubblico è ora di default), in GCP è il cliente a dover configurare IAM correttamente. Abilitare **Uniform Bucket-Level Access** ed evitare `allUsers`/`allAuthenticatedUsers` nei binding IAM, a meno di non gestire contenuto pubblico intenzionalmente.
 
-- **Abilitare Security Command Center** per ricevere findings di misconfiguration automatici <!-- REVIEW: verificare tier SCC attuali (Standard/Premium/Enterprise) e sintassi `gcloud scc findings list` (v2, parametro --source/--location) -->
+- **Abilitare Security Command Center** per ricevere findings di misconfiguration automatici (tier **Standard** gratuito con funzioni base; **Premium** a pagamento con attack path e threat detection; il tier **Enterprise** è deprecato, chiusura prevista il 21 maggio 2027 con migrazione automatica a Premium)
 - **Nota GKE Standard**: Google fornisce il Control Plane e le immagini dei nodi, ma l'upgrade dei nodi segue il release channel/maintenance window scelti dal cliente; su Autopilot l'onere è quasi interamente di Google
 - **Usare VPC Service Controls** per creare perimetri di sicurezza attorno ai servizi managed (previene data exfiltration)
 - **Configurare Organization Policy** per limitare regioni, tipi di macchine, e comportamenti non conformi
