@@ -7,9 +7,10 @@ search_keywords: [terragrunt, terragrunt.hcl, root.hcl, terragrunt run --all, ru
 parent: iac/terraform/_index
 related: [iac/terraform/ci-cd, iac/terraform/state-management, iac/terraform/moduli, iac/terraform/opentofu, iac/terraform/fondamentali]
 official_docs: https://docs.terragrunt.com/
-status: complete
+status: needs-review
+last_verified: 2026-10-04
 difficulty: advanced
-last_updated: 2026-10-02
+last_updated: 2026-10-04
 ---
 
 # Terragrunt
@@ -99,7 +100,7 @@ locals {
 
 # Versioni minime: evita il drift tra sviluppatori e CI
 terragrunt_version_constraint = ">= 0.88, < 1.0"
-terraform_version_constraint  = ">= 1.8"
+terraform_version_constraint  = ">= 1.10"   # richiesto da use_lockfile
 
 remote_state {
   backend = "s3"
@@ -128,14 +129,15 @@ generate "provider" {
 }
 
 inputs = {
-  environment = basename(dirname(get_terragrunt_dir()))
+  environment = local.account_vars.locals.environment
 }
 ```
 
 ```hcl
 # live/prod/account.hcl
 locals {
-  account_id = "111111111111"
+  account_id  = "111111111111"
+  environment = "prod"
 }
 
 # live/prod/eu-west-1/region.hcl
@@ -180,7 +182,8 @@ include "envcommon" {
   expose = true
 }
 
-# Override locale: ha precedenza sul merge (merge_strategy = "deep" di default per inputs)
+# Override locale: gli inputs della unit hanno precedenza su quelli ereditati
+# (merge_strategy dell'include: "shallow" di default; alternative "deep", "no_merge")
 inputs = {
   cidr_block = "10.10.0.0/16"
 }
@@ -241,6 +244,9 @@ terragrunt run --all plan
 terragrunt run --all apply --non-interactive --parallelism 4
 
 # Filtrare le unit (query sintassi --filter; verificare i dettagli nella versione in uso)
+# <!-- REVIEW: verificare in quale versione di Terragrunt --filter è stabile (la CI sotto pinna 0.88.0) e la sintassi 'eks...' -->
+# <!-- REVIEW: verificare che 'dag graph', 'find --dag' e '--backend-bootstrap' esistano in 0.88 e che il no-forwarding parta da 0.88 -->
+
 terragrunt run --all --filter './eu-west-1/**' plan
 terragrunt run --all --filter 'eks...' plan     # eks + dipendenze (sintassi grafo)
 ```
@@ -389,10 +395,10 @@ jobs:
 **Soluzione**:
 
 ```bash
-# Verificare che le key siano uniche
-terragrunt run --all -- state pull 2>/dev/null | head   # o controllare backend.tf generati
+# Verificare che le key siano uniche (una riga per unit, nessun duplicato)
+grep -rh --include=backend.tf '  key ' .terragrunt-cache live | sort | uniq -d
 # Rilascio manuale (solo dopo aver verificato che nessun run sia attivo)
-terragrunt force-unlock <LOCK_ID>
+terragrunt run -- force-unlock <LOCK_ID>
 # Ridurre il parallelismo
 terragrunt run --all apply --parallelism 2
 ```
@@ -410,7 +416,7 @@ terragrunt run --all apply --parallelism 2
 find . -type d -name ".terragrunt-cache" -prune -exec rm -rf {} +
 # Windows PowerShell
 Get-ChildItem -Recurse -Directory -Filter .terragrunt-cache | Remove-Item -Recurse -Force
-terragrunt run --all init -- -upgrade
+terragrunt run --all -- init -upgrade
 ```
 
 ### Drift tra versioni di Terragrunt
