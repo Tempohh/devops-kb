@@ -7,9 +7,10 @@ search_keywords: [terraform state, remote state, state locking, tfstate, s3 back
 parent: iac/terraform/_index
 related: [iac/terraform/fondamentali, iac/terraform/moduli, cloud/aws/compute/ec2, cloud/aws/iam/_index]
 official_docs: https://developer.hashicorp.com/terraform/language/state
-status: complete
+status: reviewed
 difficulty: advanced
-last_updated: 2026-03-24
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Terraform — State Management
@@ -63,8 +64,10 @@ Il locking previene che due operazioni Terraform in parallelo modifichino lo sta
 
 ```
 Operatore A: terraform apply  ──▶  Acquisce lock  ──▶  Esegue  ──▶  Rilascia lock
-Operatore B: terraform apply  ──▶  Attende lock...                    ──▶  Acquisce lock
+Operatore B: terraform apply  ──▶  Lock occupato ──▶  Errore "Error acquiring the state lock"
 ```
+
+Di default B **fallisce subito**; con `-lock-timeout=5m` riprova per il tempo indicato prima di arrendersi (utile in CI con job concorrenti).
 
 Il backend remoto con locking è **obbligatorio** per team con più di 1 persona.
 
@@ -75,10 +78,10 @@ Il backend determina dove viene memorizzato il file di state e se il locking è 
 | Backend | Locking | Storage | Note |
 |---------|---------|---------|------|
 | **local** (default) | No | File locale | Solo per sviluppo singolo |
-| **S3 + DynamoDB** | Si (DynamoDB) | S3 | Standard per AWS |
+| **S3** | Si (`use_lockfile`, oppure DynamoDB legacy) | S3 | Standard per AWS. Lock nativo S3 da Terraform 1.10 |
 | **GCS** | Si (nativo) | Google Cloud Storage | Standard per GCP |
-| **Azure Blob** | Si (nativo) | Azure Blob Storage | Standard per Azure |
-| **Terraform Cloud** | Si | HashiCorp Cloud | SaaS, include CI/CD |
+| **Azure Blob** | Si (nativo, blob lease) | Azure Blob Storage | Standard per Azure |
+| **HCP Terraform** (ex Terraform Cloud) | Si | HashiCorp/IBM Cloud | SaaS, include CI/CD |
 | **PostgreSQL** | Si | DB relazionale | Self-hosted |
 
 ## Architettura / Come Funziona
@@ -109,7 +112,10 @@ Se Terraform rileva che il serial locale è inferiore al remoto, si rifiuta di s
 
 ## Configurazione & Pratica
 
-### Backend S3 + DynamoDB (AWS)
+### Backend S3 (AWS)
+
+!!! note "DynamoDB non serve più (Terraform ≥ 1.10)"
+    Dalla 1.10 il backend S3 supporta il locking nativo con `use_lockfile = true`: Terraform scrive un oggetto `<key>.tflock` nel bucket usando scritture condizionali S3 (`If-None-Match`), che falliscono se il file esiste già → mutua esclusione senza tabella aggiuntiva. Il parametro `dynamodb_table` è **deprecato** e destinato alla rimozione. Per migrare: abilitare `use_lockfile`, tenere entrambi per un periodo (lock su entrambi), poi rimuovere `dynamodb_table` e la tabella. Il ruolo IAM deve poter fare `s3:GetObject/PutObject/DeleteObject` anche su `<key>.tflock`.
 
 ```hcl
 # versions.tf
@@ -121,8 +127,11 @@ terraform {
     encrypt        = true
     kms_key_id     = "arn:aws:kms:us-east-1:123456789:key/abcd-1234"
 
-    # DynamoDB per il locking
-    dynamodb_table = "terraform-state-lock"
+    # Locking nativo S3 (Terraform >= 1.10)
+    use_lockfile = true
+
+    # Legacy (< 1.10, deprecato): lock su DynamoDB
+    # dynamodb_table = "terraform-state-lock"
   }
 }
 ```
@@ -162,6 +171,7 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
+# Solo per Terraform < 1.10 (o durante la migrazione a use_lockfile)
 resource "aws_dynamodb_table" "terraform_state_lock" {
   name           = "terraform-state-lock"
   billing_mode   = "PAY_PER_REQUEST"
@@ -181,7 +191,7 @@ terraform {
   backend "gcs" {
     bucket  = "mycompany-terraform-state"
     prefix  = "prod/networking"
-    # GCS supporta locking nativo — niente DynamoDB
+    # GCS supporta locking nativo (file .tflock nel bucket)
   }
 }
 ```
@@ -268,9 +278,11 @@ terraform state list
 terraform state show aws_instance.web
 
 # Spostare una risorsa (rinominare nel codice senza ricreare)
+# Alternativa dichiarativa e revisionabile: blocco `moved {}` (>= 1.1)
 terraform state mv aws_instance.web aws_instance.web_server
 
 # Rimuovere una risorsa dal state (senza distruggerla)
+# Alternativa dichiarativa: blocco `removed { lifecycle { destroy = false } }` (>= 1.7)
 terraform state rm aws_instance.legacy
 
 # Importare una risorsa esistente nel state
@@ -335,11 +347,13 @@ resource "aws_instance" "web" {
 # Importare una risorsa già esistente sul provider
 terraform import aws_vpc.main vpc-0a1b2c3d4e5f6a7b8
 
-# Import di risorse con for_each (v1.5+, tramite import block)
+# Preferire gli import block: sono revisionabili in plan e versionabili nel codice
 ```
 
 ```hcl
-# Import block (Terraform >= 1.5) — dichiarativo
+# Import block (Terraform >= 1.5) — dichiarativo, rivisto nel plan/apply.
+# `terraform plan -generate-config-out=generated.tf` genera anche l'HCL (>= 1.5).
+# for_each negli import block: >= 1.7.
 import {
   to = aws_vpc.main
   id = "vpc-0a1b2c3d4e5f6a7b8"
@@ -370,27 +384,37 @@ prod/                # TUTTO — ogni apply è rischioso
 
 ### Proteggere il State File
 
-```hcl
-# IAM policy per il bucket S3 dello state
+Lo state contiene **in chiaro** i valori degli attributi, inclusi password e chiavi generate (es. `aws_db_instance.password`, `random_password`), anche se marcati `sensitive` (che nasconde solo l'output a video). Quindi: bucket privato, cifrato (KMS), versioning, accesso minimo, nessun commit di `terraform.tfstate` in Git. OpenTofu ≥ 1.7 offre inoltre la **state encryption** client-side (vedi [OpenTofu](./opentofu.md)); Terraform no.
+
+```json
+// IAM policy per il ruolo che esegue Terraform (S3 + lock nativo)
 {
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-      "Resource": "arn:aws:s3:::mycompany-terraform-state/*",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::mycompany-terraform-state",
       "Condition": {
-        "StringEquals": { "s3:prefix": ["prod/"] }
+        "StringLike": { "s3:prefix": ["prod/*"] }
       }
     },
     {
       "Effect": "Allow",
-      "Action": ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:DeleteItem"],
-      "Resource": "arn:aws:dynamodb:*:*:table/terraform-state-lock"
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::mycompany-terraform-state/prod/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+      "Resource": "arn:aws:kms:us-east-1:123456789:key/abcd-1234"
     }
   ]
 }
 ```
+
+!!! note "Perché due statement"
+    `s3:prefix` è una condition key valida solo per `s3:ListBucket` (azione sul bucket), non per le azioni su oggetto: per queste si limita il `Resource` al path. Con il backend legacy servono anche `dynamodb:GetItem/PutItem/DeleteItem` sulla tabella di lock.
 
 ### State in CI/CD
 
@@ -402,11 +426,11 @@ prod/                # TUTTO — ogni apply è rischioso
       -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
       -backend-config="key=${{ env.TF_STATE_KEY }}" \
       -backend-config="region=${{ env.AWS_REGION }}"
-    terraform plan -out=tfplan
+    terraform plan -lock-timeout=5m -out=tfplan
 
 - name: Terraform Apply (main only)
   if: github.ref == 'refs/heads/main'
-  run: terraform apply -auto-approve tfplan
+  run: terraform apply tfplan  # un piano salvato non richiede conferma
 ```
 
 ## Troubleshooting
@@ -445,7 +469,10 @@ terraform plan -refresh-only -detailed-exitcode
 ### Lock Bloccato
 
 ```bash
-# Verificare il lock su DynamoDB
+# Backend S3 con use_lockfile: il lock è l'oggetto <key>.tflock
+aws s3api head-object   --bucket mycompany-terraform-state   --key prod/networking/terraform.tfstate.tflock
+
+# Backend S3 legacy: verificare il lock su DynamoDB
 aws dynamodb get-item \
   --table-name terraform-state-lock \
   --key '{"LockID": {"S": "mycompany-terraform-state/prod/networking/terraform.tfstate"}}'
@@ -465,6 +492,11 @@ terraform force-unlock "LOCK_ID_FROM_ERROR_MESSAGE"
     I moduli condividono output tramite remote state data source.
 
     **Approfondimento completo →** [Terraform Moduli](./moduli.md)
+
+??? info "OpenTofu — State encryption"
+    Fork open source di Terraform; aggiunge la cifratura nativa di state e plan.
+
+    **Approfondimento completo →** [OpenTofu](./opentofu.md)
 
 ## Riferimenti
 
