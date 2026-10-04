@@ -135,8 +135,8 @@ appInsights.setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
 
 const client = appInsights.defaultClient;
 
-// Custom event (API v2; in v3 la disponibilità di trackEvent/trackMetric/trackException
-// va verificata, oppure usare span/metriche OpenTelemetry) <!-- REVIEW: verificare API custom telemetry in applicationinsights v3 -->
+// Custom event (API v2, SDK classico 2.x ormai ritirato; in v3 usare span/metriche/log
+// OpenTelemetry, la disponibilità di trackEvent/trackMetric/trackException non è documentata) <!-- CURRENCY: non verificato (2026-10) — API custom telemetry in applicationinsights v3 -->
 client.trackEvent({
     name: "OrderCompleted",
     properties: {
@@ -175,11 +175,13 @@ az webapp config appsettings set \
   --settings \
     APPLICATIONINSIGHTS_CONNECTION_STRING="$CONNECTION_STRING" \
     ApplicationInsightsAgent_EXTENSION_VERSION=~3
-# Windows: la versione dell'estensione dipende dal runtime (~2 per .NET Framework/.NET Core). <!-- REVIEW: verificare valori EXTENSION_VERSION per runtime/OS -->
+# EXTENSION_VERSION: ~2 su Windows (.NET Framework, ASP.NET Core, Java, Node.js), ~3 su Linux (ASP.NET Core, Java, Node.js, Python).
+# Setting aggiuntivi: Java su Windows XDT_MicrosoftApplicationInsights_Java=1; Node.js su Windows XDT_MicrosoftApplicationInsights_NodeJS=1 (Node.js su App Service è in preview);
+# ASP.NET Core XDT_MicrosoftApplicationInsights_Mode=recommended + XDT_MicrosoftApplicationInsights_PreemptSdk=1.
 ```
 
 !!! warning "Container Insights ≠ Application Insights"
-    `az aks update --enable-addon monitoring` abilita **Container Insights** (metriche e log di nodi/pod su Log Analytics), non l'instrumentation applicativa. Per l'APM su AKS si usa l'auto-instrumentation di Application Insights (preview, per workload Java e Node.js, via `az aks update --enable-azure-monitor-app-monitoring` con estensione `aks-preview` e risorsa `Instrumentation`) oppure la distro OpenTelemetry nel codice. <!-- REVIEW: verificare stato GA e flag CLI dell'auto-instrumentation AKS -->
+    `az aks update --enable-addon monitoring` abilita **Container Insights** (metriche e log di nodi/pod su Log Analytics), non l'instrumentation applicativa. Per l'APM su AKS si usa l'auto-instrumentation di Application Insights (workload Java e Node.js su node pool Linux; si prepara il cluster con `az aks update --enable-azure-monitor-app-monitoring`, Azure CLI ≥ 2.60.0, senza bisogno di `aks-preview`; poi si crea una risorsa custom `Instrumentation` (`monitor.azure.com/v1`) per namespace e si riavvia il deployment). Per .NET e Python esiste solo una limited preview. In alternativa, la distro OpenTelemetry nel codice.
 
 !!! tip "Autenticazione Entra ID"
     In produzione disabilitare l'ingestion con sola connection string (`DisableLocalAuth=true` sulla risorsa) e autenticare l'SDK con Microsoft Entra ID (ruolo *Monitoring Metrics Publisher* sulla risorsa, usando una managed identity): impedisce a chiunque conosca la connection string di inviare telemetria falsa.
@@ -249,7 +251,8 @@ Gli Availability Tests eseguono probe periodici sull'applicazione da più region
 - **URL ping test (classic)**: ritirati il 30 settembre 2026 → migrare a Standard test. I multi-step web test (Visual Studio `.webtest`) sono già stati ritirati.
 
 ```bash
-# Creare Standard test (--kind standard). Il tag hidden-link lega il test alla risorsa Application Insights.
+# Creare Standard test (--web-test-kind standard; `--kind` accetta solo ping/multistep). Estensione application-insights (CLI ≥ 2.71.0).
+# Il tag hidden-link lega il test alla risorsa Application Insights.
 AI_ID=$(az monitor app-insights component show --resource-group $RG --app ai-myapp-prod --query id -o tsv)
 
 az monitor app-insights web-test create \
@@ -257,7 +260,7 @@ az monitor app-insights web-test create \
   --name test-homepage-availability \
   --location westeurope \
   --defined-web-test-name test-homepage-availability \
-  --kind standard \
+  --web-test-kind standard \
   --enabled true \
   --frequency 300 \
   --timeout 30 \
@@ -267,8 +270,9 @@ az monitor app-insights web-test create \
   --request-url "https://myapp.example.com/health" \
   --http-verb GET \
   --expected-status-code 200 \
+  --ssl-check true \
+  --ssl-lifetime-check 7 \
   --tags "hidden-link:$AI_ID=Resource"
-# <!-- REVIEW: verificare nomi/flag esatti di `az monitor app-insights web-test create` (estensione application-insights) -->
 
 # Alert quando availability scende sotto il 95% (finestra 5 min)
 az monitor metrics alert create \
@@ -297,7 +301,8 @@ Il Profiler campiona gli stack trace dell'applicazione in produzione (a interval
 
 ```bash
 # App Service: abilitare dal portale (Application Insights → Performance → Profiler).
-# Richiede un piano App Service Basic o superiore. <!-- REVIEW: verificare tier minimo corrente e opzioni CLI -->
+# Richiede un piano App Service Basic o superiore; un solo profiler per web app. Nessun comando az dedicato: portale o ARM template.
+# Linux/container: pacchetto NuGet (o Azure Monitor OpenTelemetry Profiler for .NET, in preview). Java: profiler JFR in preview.
 # Per VM / container: aggiungere il pacchetto NuGet al progetto .NET e chiamare AddServiceProfiler().
 ```
 
@@ -318,7 +323,7 @@ requests
 
 Snapshot Debugger cattura uno snapshot (minidump con stack e variabili locali) quando si verifica un'eccezione "first chance" su un'applicazione **.NET / .NET Core**, permettendo il debug post-mortem da Visual Studio senza fermare l'app. Non è disponibile per Python o Node.js: lì servono log/eccezioni strutturati e span OpenTelemetry.
 
-Abilitazione su App Service: dal portale (*Application Insights → Snapshot Debugger*) oppure con l'estensione del sito; per VM/container si usa il pacchetto NuGet `Microsoft.ApplicationInsights.SnapshotCollector`. <!-- REVIEW: verificare app setting esatti (SnapshotDebugger_EXTENSION_VERSION) e stato di supporto corrente di Snapshot Debugger -->
+Abilitazione su App Service: dal portale (*Application Insights → Snapshot Debugger*) oppure con l'estensione del sito; per VM/container si usa il pacchetto NuGet `Microsoft.ApplicationInsights.SnapshotCollector`. <!-- CURRENCY: non verificato (2026-10) — app setting esatti (SnapshotDebugger_EXTENSION_VERSION) e stato di supporto corrente di Snapshot Debugger -->
 
 ```csharp
 // .NET: registrazione del collector (pacchetto Microsoft.ApplicationInsights.SnapshotCollector)
@@ -346,7 +351,9 @@ configure_azure_monitor(
     connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
     sampling_ratio=0.1  # 10% delle trace
 )
-# Versioni recenti espongono anche traces_per_second (rate-limited). <!-- REVIEW: verificare parametri sampling correnti di configure_azure_monitor -->
+# Alternativa rate-limited: traces_per_second=1.5. Senza sampling_ratio né traces_per_second né variabili d'ambiente,
+# configure_azure_monitor() usa il RateLimitedSampler di default.
+# Via env: OTEL_TRACES_SAMPLER=microsoft.fixed_percentage|microsoft.rate_limited + OTEL_TRACES_SAMPLER_ARG.
 ```
 
 ```javascript
@@ -441,7 +448,7 @@ az monitor app-insights workbook create \
   --location westeurope \
   --source-id $(az monitor app-insights component show --resource-group $RG --app ai-myapp-prod --query id -o tsv) \
   --serialized-data @workbook.json
-# <!-- REVIEW: verificare flag di `az monitor app-insights workbook create` -->
+# Estensione application-insights (CLI ≥ 2.71.0); --kind accetta solo `shared`.
 # In pratica: costruire il workbook dal portale ed esportarne il JSON (Advanced editor) per versionarlo in IaC.
 ```
 
