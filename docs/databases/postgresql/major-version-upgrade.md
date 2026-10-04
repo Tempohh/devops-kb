@@ -7,9 +7,9 @@ search_keywords: [postgresql major upgrade, pg_upgrade, pg_upgrade --link, pg_up
 parent: databases/postgresql/_index
 related: [databases/postgresql/replicazione, databases/postgresql/extensions, databases/postgresql/mvcc-vacuum, databases/kubernetes-cloud/db-su-kubernetes, databases/kubernetes-cloud/managed-databases, databases/replicazione-ha/backup-pitr]
 official_docs: https://www.postgresql.org/docs/current/pgupgrade.html
-status: needs-review
+status: reviewed
 difficulty: advanced
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 last_verified: 2026-10-04
 ---
 
@@ -79,7 +79,7 @@ Limiti noti della logical replication, da affrontare **prima** di sceglierla:
 
 | Limite | Conseguenza | Mitigazione |
 |---|---|---|
-| Le **sequenze** non vengono replicate (fino a PG 18; da PG 19 sono previste) <!-- REVIEW: verificare se PG 19 (autunno 2026) ha rilasciato la replica delle sequenze e se pg_upgrade/stato corrente delle versioni supportate è cambiato --> | Dopo il cutover gli `INSERT` falliscono con duplicate key | Sincronizzare con `setval()` al cutover |
+| Le **sequenze** non replicano le modifiche incrementali (PG 19, in beta a ottobre 2026 e non ancora GA, aggiunge solo la sincronizzazione puntuale con `ALTER SUBSCRIPTION ... REFRESH SEQUENCES`, che richiede un publisher PG 19+) | Dopo il cutover gli `INSERT` falliscono con duplicate key | Sincronizzare con `setval()` al cutover (o `REFRESH SEQUENCES` se il publisher è PG 19+) |
 | Il **DDL non viene replicato** | Una `ALTER TABLE` su blue rompe la subscription | Congelare gli schema change durante la migrazione |
 | I **large object** (`pg_largeobject`) non vengono replicati | Dati mancanti su green | Migrarli con `pg_dump --large-objects` o convertirli in `bytea` |
 | Tabelle senza `PRIMARY KEY` | `UPDATE`/`DELETE` falliscono se non c'è `REPLICA IDENTITY` | `ALTER TABLE ... REPLICA IDENTITY FULL` (costoso) o aggiungere una PK |
