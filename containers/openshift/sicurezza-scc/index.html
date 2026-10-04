@@ -11250,7 +11250,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -11275,7 +11275,7 @@
     
   
   
-    <span class="md-status md-status--complete"></span>
+    <span class="md-status md-status--needs-review"></span>
   
 
   
@@ -24711,13 +24711,18 @@
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>  OpenShift SCC:
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>  - Granulari (10+ SCC predefiniti, custom illimitati)
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  - Per ServiceAccount (non per namespace)
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  - Il sistema assegna automaticamente la SCC più restrittiva
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    compatibile con il pod
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>  SCC priority: più alto il valore → valutato per primo
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  anyuid (10) &gt; restricted-v2 (default) &gt; ...
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  - Per utente/gruppo/ServiceAccount (non per namespace)
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  - L'admission controller considera le SCC accessibili a chi crea il pod
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    e al ServiceAccount del pod; le ordina per priority decrescente
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    (a parità, dalla più restrittiva) e usa la PRIMA che valida il pod
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>  SCC priority: più alto il valore → valutato per primo
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>  anyuid (10) &gt; SCC con priority &lt;none&gt; (restricted-v2, ...)
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">SCC e Pod Security Admission</p>
+<p>Dalla 4.11 OpenShift abilita anche il Pod Security Admission (PSA) di Kubernetes. Un controller (<em>pod-security-admission-label-synchronization</em>) imposta le label PSA dei namespace utente in base alle SCC che i ServiceAccount possono usare, così le due barriere restano coerenti. <code>restricted-v2</code> è allineata al profilo PSA <code>restricted</code>. Le SCC restano il meccanismo che <em>muta</em> il pod (assegna UID, contesto SELinux, fsGroup); il PSA si limita ad ammettere o rifiutare.</p>
+</div>
 <p><strong>SCC predefiniti di OpenShift:</strong></p>
 <table>
 <thead>
@@ -24730,13 +24735,13 @@
 <tbody>
 <tr>
 <td><code>restricted-v2</code></td>
-<td>default</td>
-<td>Default per tutti i pod non privilegiati</td>
+<td>nessuna</td>
+<td>Default per tutti i pod non privilegiati (concessa a <code>system:authenticated</code>)</td>
 </tr>
 <tr>
 <td><code>restricted</code></td>
-<td>0</td>
-<td>Legacy, mantenuto per compatibilità</td>
+<td>nessuna</td>
+<td>Legacy (pre-4.11), mantenuta per compatibilità</td>
 </tr>
 <tr>
 <td><code>anyuid</code></td>
@@ -24745,36 +24750,43 @@
 </tr>
 <tr>
 <td><code>privileged</code></td>
-<td>100</td>
-<td>Accesso completo (system pods)</td>
+<td>nessuna</td>
+<td>Accesso completo (system pods); concessa esplicitamente, mai di default</td>
 </tr>
 <tr>
 <td><code>hostmount-anyuid</code></td>
-<td>0</td>
+<td>nessuna</td>
 <td>Mount di path host</td>
 </tr>
 <tr>
 <td><code>hostnetwork</code></td>
-<td>0</td>
+<td>nessuna</td>
 <td>hostNetwork: true</td>
 </tr>
 <tr>
 <td><code>hostnetwork-v2</code></td>
-<td>0</td>
-<td>hostNetwork con seccomp runtime</td>
+<td>nessuna</td>
+<td>Come <code>hostnetwork</code> ma con drop ALL capabilities e seccomp</td>
 </tr>
 <tr>
 <td><code>nonroot</code></td>
-<td>0</td>
+<td>nessuna</td>
 <td>Forza runAsNonRoot ma permette qualsiasi UID non-root</td>
 </tr>
 <tr>
 <td><code>nonroot-v2</code></td>
-<td>0</td>
-<td>Come nonroot ma con seccomp</td>
+<td>nessuna</td>
+<td>Come <code>nonroot</code> ma con drop ALL capabilities e seccomp</td>
 </tr>
 </tbody>
 </table>
+<!-- REVIEW: verificare se nelle release 4.2x esiste `restricted-v3` (user namespaces) e va aggiunta alla tabella/al default -->
+
+<p>Esistono anche <code>hostaccess</code> e SCC dedicate a componenti di sistema (<code>node-exporter</code>, ecc.). Le SCC <code>-v2</code> sono quelle da preferire: impongono <code>drop ALL</code> delle capabilities e il seccomp <code>runtime/default</code>, in linea con il PSA <code>restricted</code>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Non modificare le SCC predefinite</p>
+<p>Le SCC di default vengono riconciliate dagli operatori e le modifiche si perdono agli upgrade. Per esigenze particolari crea una SCC custom.</p>
+</div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Lista tutte le SCC nel cluster</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>oc<span class="w"> </span>get<span class="w"> </span>scc
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>oc<span class="w"> </span>describe<span class="w"> </span>scc<span class="w"> </span>restricted-v2
@@ -24786,7 +24798,7 @@
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Settings:</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="c1">#   Allow Privileged: false</span>
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="c1">#   Allow Privilege Escalation: false</span>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1">#   Allowed Capabilities: &lt;none&gt;   ← nessuna cap aggiuntiva</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1">#   Allowed Capabilities: NET_BIND_SERVICE  ← unica cap aggiuntiva richiedibile</span>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="c1">#   Allowed Seccomp Profiles: runtime/default,localhost/*</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1">#   Default Add Capabilities: &lt;none&gt;</span>
 </span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1">#   Required Drop Capabilities: ALL</span>
@@ -24800,26 +24812,27 @@
 </span></code></pre></div>
 <hr />
 <h2 id="assegnare-scc-a-serviceaccount">Assegnare SCC a ServiceAccount<a class="headerlink" href="#assegnare-scc-a-serviceaccount" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Approccio 1: tramite ClusterRoleBinding (raccomandato)</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Concede l'uso della SCC al ServiceAccount (crea un RoleBinding nel namespace)</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-scc-to-user<span class="w"> </span>anyuid<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Equivalente manuale:</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>oc<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>my-app-anyuid<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span>--clusterrole<span class="o">=</span>system:openshift:scc:anyuid<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--serviceaccount<span class="o">=</span>my-namespace:my-service-account
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># Rimuovi SCC</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>remove-scc-from-user<span class="w"> </span>anyuid<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="c1"># Verifica quale SCC verrebbe assegnata a un pod</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-subject-review<span class="w"> </span>-f<span class="w"> </span>pod.yaml
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="c1"># RESOURCE    NAME    ALLOWED BY</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># Pod/my-pod          anyuid    ← questa SCC permette il pod</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="c1"># Verifica quale SCC è usata da un pod esistente</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>oc<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>my-pod<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>scc
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="c1"># annotations:</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1">#   openshift.io/scc: restricted-v2</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Equivalente manuale (RBAC: il verbo `use` sulla SCC passa dal ClusterRole</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="c1"># system:openshift:scc:&lt;nome&gt;):</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>oc<span class="w"> </span>create<span class="w"> </span>rolebinding<span class="w"> </span>my-app-anyuid<span class="w"> </span>-n<span class="w"> </span>my-namespace<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span>--clusterrole<span class="o">=</span>system:openshift:scc:anyuid<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">    </span>--serviceaccount<span class="o">=</span>my-namespace:my-service-account
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="c1"># Rimuovi SCC</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>remove-scc-from-user<span class="w"> </span>anyuid<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="c1"># Verifica quale SCC verrebbe assegnata a un pod</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-subject-review<span class="w"> </span>-f<span class="w"> </span>pod.yaml
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="c1"># RESOURCE    NAME    ALLOWED BY</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="c1"># Pod/my-pod          anyuid    ← questa SCC permette il pod</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="c1"># Verifica quale SCC è usata da un pod esistente</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>oc<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>my-pod<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>scc
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="c1"># annotations:</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="c1">#   openshift.io/scc: restricted-v2</span>
 </span></code></pre></div>
 <hr />
 <h2 id="scc-custom-least-privilege-per-applicazioni">SCC Custom — Least Privilege per Applicazioni<a class="headerlink" href="#scc-custom-least-privilege-per-applicazioni" title="Permanent link">&para;</a></h2>
@@ -24933,7 +24946,7 @@
 </span><span id="__span-5-50"><a id="__codelineno-5-50" name="__codelineno-5-50" href="#__codelineno-5-50"></a>
 </span><span id="__span-5-51"><a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a><span class="w">  </span><span class="nt">tokenConfig</span><span class="p">:</span>
 </span><span id="__span-5-52"><a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a><span class="w">    </span><span class="nt">accessTokenMaxAgeSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">86400</span><span class="w">     </span><span class="c1"># 24h</span>
-</span><span id="__span-5-53"><a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a><span class="w">    </span><span class="nt">accessTokenInactivityTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span><span class="w">  </span><span class="c1"># 1h di inattività → scadenza</span>
+</span><span id="__span-5-53"><a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a><span class="w">    </span><span class="nt">accessTokenInactivityTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600s</span><span class="w"> </span><span class="c1"># durata (stringa con unità, minimo 300s): 1h di inattività → scadenza</span>
 </span></code></pre></div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Crea il secret htpasswd</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>htpasswd<span class="w"> </span>-c<span class="w"> </span>-B<span class="w"> </span>htpasswd.txt<span class="w"> </span>admin
@@ -24967,22 +24980,24 @@
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># registry-admin        → gestisce l'image registry</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># registry-editor       → pusha/tira immagini</span>
 </span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Assegna cluster-admin temporaneo (con scadenza)</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-cluster-role-to-user<span class="w"> </span>cluster-admin<span class="w"> </span>alice<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span>--rolebinding-name<span class="o">=</span>temp-admin
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># Assegna admin a un namespace</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-role-to-user<span class="w"> </span>admin<span class="w"> </span>bob<span class="w"> </span>-n<span class="w"> </span>production
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="c1"># Assegna role a un gruppo LDAP</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-role-to-group<span class="w"> </span>view<span class="w"> </span><span class="s2">"corporate-ldap:developers"</span><span class="w"> </span>-n<span class="w"> </span>production
-</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>
-</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a><span class="c1"># Rimuovi tutti i role di un utente da un namespace</span>
-</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>remove-user<span class="w"> </span>alice<span class="w"> </span>-n<span class="w"> </span>production
-</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a>
-</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a><span class="c1"># Audit: chi può fare cosa</span>
-</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>who-can<span class="w"> </span>create<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production
-</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>who-can<span class="w"> </span>delete<span class="w"> </span>secrets<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># Assegna cluster-admin (nessuna scadenza automatica: va rimosso a mano</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="c1"># con `oc adm policy remove-cluster-role-from-user`)</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-cluster-role-to-user<span class="w"> </span>cluster-admin<span class="w"> </span>alice<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">    </span>--rolebinding-name<span class="o">=</span>temp-admin
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># Assegna admin a un namespace</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-role-to-user<span class="w"> </span>admin<span class="w"> </span>bob<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="c1"># Assegna role a un gruppo sincronizzato da LDAP</span>
+</span><span id="__span-7-22"><a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a><span class="c1"># (il nome è quello di groupUIDNameMapping; il prefisso "&lt;idp&gt;:" vale solo per gli utenti)</span>
+</span><span id="__span-7-23"><a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-role-to-group<span class="w"> </span>view<span class="w"> </span>developers<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-7-24"><a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+</span><span id="__span-7-25"><a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="c1"># Rimuovi tutti i role di un utente da un namespace</span>
+</span><span id="__span-7-26"><a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>remove-user<span class="w"> </span>alice<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-7-27"><a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>
+</span><span id="__span-7-28"><a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a><span class="c1"># Audit: chi può fare cosa</span>
+</span><span id="__span-7-29"><a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>who-can<span class="w"> </span>create<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>production
+</span><span id="__span-7-30"><a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>who-can<span class="w"> </span>delete<span class="w"> </span>secrets<span class="w"> </span>-n<span class="w"> </span>production
 </span></code></pre></div>
 <p><strong>Group Sync con LDAP:</strong></p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># LDAPSyncConfig — sincronizza gruppi LDAP → Gruppi OpenShift</span>
@@ -25018,31 +25033,46 @@
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span>--sync-config<span class="o">=</span>ldap-sync-config.yaml<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">    </span>--confirm
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Schedulato via CronJob:</span>
-</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>oc<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
-</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s">apiVersion: batch/v1</span>
-</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="s">kind: CronJob</span>
-</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="s">metadata:</span>
-</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="s">  name: ldap-group-sync</span>
-</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="s">  namespace: openshift-authentication</span>
-</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="s">spec:</span>
-</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="s">  schedule: "*/15 * * * *"</span>
-</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="s">  jobTemplate:</span>
-</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="s">    spec:</span>
-</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="s">      template:</span>
-</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s">        spec:</span>
-</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="s">          serviceAccountName: ldap-sync-sa</span>
-</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="s">          containers:</span>
-</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s">            - name: sync</span>
-</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="s">              image: registry.redhat.io/openshift4/ose-cli:latest</span>
-</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="s">              command: [oc, adm, groups, sync, --sync-config=/etc/ldap/sync.yaml, --confirm]</span>
-</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="s">              volumeMounts:</span>
-</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="s">                - {name: config, mountPath: /etc/ldap}</span>
-</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="s">          volumes:</span>
-</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="s">            - name: config</span>
-</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="s">              configMap:</span>
-</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="s">                name: ldap-sync-config</span>
-</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="s">EOF</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="c1"># Schedulato via CronJob, in un namespace dedicato (mai in openshift-* gestiti</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># dagli operatori). Il ServiceAccount ha bisogno di permessi sui Group:</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>oc<span class="w"> </span>new-project<span class="w"> </span>ldap-sync
+</span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>oc<span class="w"> </span>create<span class="w"> </span>sa<span class="w"> </span>ldap-sync-sa<span class="w"> </span>-n<span class="w"> </span>ldap-sync
+</span><span id="__span-9-10"><a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a>oc<span class="w"> </span>create<span class="w"> </span>clusterrole<span class="w"> </span>ldap-group-syncer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-11"><a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">    </span>--verb<span class="o">=</span>create,get,list,patch,update<span class="w"> </span>--resource<span class="o">=</span>groups.user.openshift.io
+</span><span id="__span-9-12"><a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a>oc<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>ldap-group-syncer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-13"><a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">    </span>--clusterrole<span class="o">=</span>ldap-group-syncer<span class="w"> </span>--serviceaccount<span class="o">=</span>ldap-sync:ldap-sync-sa
+</span><span id="__span-9-14"><a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a>
+</span><span id="__span-9-15"><a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="c1"># La sync config referenzia /etc/secrets/ldap-password e il CA: vanno montati</span>
+</span><span id="__span-9-16"><a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="c1"># (qui sotto: ConfigMap ldap-sync-config con sync.yaml e ca, Secret ldap-sync-secret)</span>
+</span><span id="__span-9-17"><a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a>oc<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;'EOF'</span>
+</span><span id="__span-9-18"><a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="s">apiVersion: batch/v1</span>
+</span><span id="__span-9-19"><a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="s">kind: CronJob</span>
+</span><span id="__span-9-20"><a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="s">metadata:</span>
+</span><span id="__span-9-21"><a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="s">  name: ldap-group-sync</span>
+</span><span id="__span-9-22"><a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="s">  namespace: ldap-sync</span>
+</span><span id="__span-9-23"><a id="__codelineno-9-23" name="__codelineno-9-23" href="#__codelineno-9-23"></a><span class="s">spec:</span>
+</span><span id="__span-9-24"><a id="__codelineno-9-24" name="__codelineno-9-24" href="#__codelineno-9-24"></a><span class="s">  schedule: "*/15 * * * *"</span>
+</span><span id="__span-9-25"><a id="__codelineno-9-25" name="__codelineno-9-25" href="#__codelineno-9-25"></a><span class="s">  jobTemplate:</span>
+</span><span id="__span-9-26"><a id="__codelineno-9-26" name="__codelineno-9-26" href="#__codelineno-9-26"></a><span class="s">    spec:</span>
+</span><span id="__span-9-27"><a id="__codelineno-9-27" name="__codelineno-9-27" href="#__codelineno-9-27"></a><span class="s">      template:</span>
+</span><span id="__span-9-28"><a id="__codelineno-9-28" name="__codelineno-9-28" href="#__codelineno-9-28"></a><span class="s">        spec:</span>
+</span><span id="__span-9-29"><a id="__codelineno-9-29" name="__codelineno-9-29" href="#__codelineno-9-29"></a><span class="s">          serviceAccountName: ldap-sync-sa</span>
+</span><span id="__span-9-30"><a id="__codelineno-9-30" name="__codelineno-9-30" href="#__codelineno-9-30"></a><span class="s">          containers:</span>
+</span><span id="__span-9-31"><a id="__codelineno-9-31" name="__codelineno-9-31" href="#__codelineno-9-31"></a><span class="s">            - name: sync</span>
+</span><span id="__span-9-32"><a id="__codelineno-9-32" name="__codelineno-9-32" href="#__codelineno-9-32"></a><span class="s">              image: registry.redhat.io/openshift4/ose-cli:v4.18  # pin alla versione del cluster</span>
+</span><span id="__span-9-33"><a id="__codelineno-9-33" name="__codelineno-9-33" href="#__codelineno-9-33"></a><span class="s">              command: [oc, adm, groups, sync, --sync-config=/etc/ldap/sync.yaml, --confirm]</span>
+</span><span id="__span-9-34"><a id="__codelineno-9-34" name="__codelineno-9-34" href="#__codelineno-9-34"></a><span class="s">              volumeMounts:</span>
+</span><span id="__span-9-35"><a id="__codelineno-9-35" name="__codelineno-9-35" href="#__codelineno-9-35"></a><span class="s">                - {name: config, mountPath: /etc/ldap}</span>
+</span><span id="__span-9-36"><a id="__codelineno-9-36" name="__codelineno-9-36" href="#__codelineno-9-36"></a><span class="s">                - {name: secrets, mountPath: /etc/secrets, readOnly: true}</span>
+</span><span id="__span-9-37"><a id="__codelineno-9-37" name="__codelineno-9-37" href="#__codelineno-9-37"></a><span class="s">          restartPolicy: Never</span>
+</span><span id="__span-9-38"><a id="__codelineno-9-38" name="__codelineno-9-38" href="#__codelineno-9-38"></a><span class="s">          volumes:</span>
+</span><span id="__span-9-39"><a id="__codelineno-9-39" name="__codelineno-9-39" href="#__codelineno-9-39"></a><span class="s">            - name: config</span>
+</span><span id="__span-9-40"><a id="__codelineno-9-40" name="__codelineno-9-40" href="#__codelineno-9-40"></a><span class="s">              configMap:</span>
+</span><span id="__span-9-41"><a id="__codelineno-9-41" name="__codelineno-9-41" href="#__codelineno-9-41"></a><span class="s">                name: ldap-sync-config</span>
+</span><span id="__span-9-42"><a id="__codelineno-9-42" name="__codelineno-9-42" href="#__codelineno-9-42"></a><span class="s">            - name: secrets</span>
+</span><span id="__span-9-43"><a id="__codelineno-9-43" name="__codelineno-9-43" href="#__codelineno-9-43"></a><span class="s">              secret:</span>
+</span><span id="__span-9-44"><a id="__codelineno-9-44" name="__codelineno-9-44" href="#__codelineno-9-44"></a><span class="s">                secretName: ldap-sync-secret</span>
+</span><span id="__span-9-45"><a id="__codelineno-9-45" name="__codelineno-9-45" href="#__codelineno-9-45"></a><span class="s">EOF</span>
 </span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
@@ -25053,8 +25083,8 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Verifica quale SCC è necessaria</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-subject-review<span class="w"> </span>-f<span class="w"> </span>pod.yaml
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Verifica a quale SCC ha accesso il ServiceAccount</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-review<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Verifica con quale SCC il pod sarebbe ammesso usando il suo ServiceAccount</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-review<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace<span class="w"> </span>-f<span class="w"> </span>pod.yaml
 </span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
 </span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Assegna la SCC necessaria</span>
 </span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-scc-to-user<span class="w"> </span>anyuid<span class="w"> </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
@@ -25074,9 +25104,9 @@
 </span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>oc<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>openshift-config
 </span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>oc<span class="w"> </span>describe<span class="w"> </span>secret<span class="w"> </span>ldap-bind-secret<span class="w"> </span>-n<span class="w"> </span>openshift-config
 </span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Testa la connettività LDAP dal cluster</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="c1"># Testa connettività TLS verso LDAP dal cluster (ubi9 ha openssl, non ldapsearch)</span>
 </span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>oc<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>--rm<span class="w"> </span>ldap-test<span class="w"> </span>--image<span class="o">=</span>registry.access.redhat.com/ubi9/ubi<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span>--restart<span class="o">=</span>Never<span class="w"> </span>--<span class="w"> </span>ldapsearch<span class="w"> </span>-H<span class="w"> </span>ldaps://ldap.company.com:636<span class="w"> </span>-x
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span>--restart<span class="o">=</span>Never<span class="w"> </span>--<span class="w"> </span>openssl<span class="w"> </span>s_client<span class="w"> </span>-connect<span class="w"> </span>ldap.company.com:636<span class="w"> </span>&lt;/dev/null
 </span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>
 </span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="c1"># Verifica la configurazione OAuth attuale</span>
 </span><span id="__span-11-13"><a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>oc<span class="w"> </span>get<span class="w"> </span>oauth<span class="w"> </span>cluster<span class="w"> </span>-o<span class="w"> </span>yaml
@@ -25091,17 +25121,18 @@
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span>--sync-config<span class="o">=</span>ldap-sync-config.yaml
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
 </span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="c1"># Verifica i log del CronJob</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>oc<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>openshift-authentication<span class="w"> </span>job/ldap-group-sync-&lt;id&gt;
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>oc<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ldap-sync<span class="w"> </span>job/ldap-group-sync-&lt;id&gt;
 </span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Verifica che il ServiceAccount abbia il ClusterRole necessario</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>who-can<span class="w"> </span>create<span class="w"> </span>groups
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="c1"># Assegna il ClusterRole corretto se mancante</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>add-cluster-role-to-user<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span>system:auth-delegator<span class="w"> </span>-z<span class="w"> </span>ldap-sync-sa<span class="w"> </span>-n<span class="w"> </span>openshift-authentication
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="c1"># Lista i gruppi sincronizzati</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>oc<span class="w"> </span>get<span class="w"> </span>groups
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="c1"># Verifica che il ServiceAccount possa creare/aggiornare i Group</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>oc<span class="w"> </span>auth<span class="w"> </span>can-i<span class="w"> </span>update<span class="w"> </span>groups.user.openshift.io<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span>--as<span class="o">=</span>system:serviceaccount:ldap-sync:ldap-sync-sa
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="c1"># Se manca: ClusterRole con verbi create,get,list,patch,update su groups (vedi sopra)</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>oc<span class="w"> </span>create<span class="w"> </span>clusterrolebinding<span class="w"> </span>ldap-group-syncer<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">    </span>--clusterrole<span class="o">=</span>ldap-group-syncer<span class="w"> </span>--serviceaccount<span class="o">=</span>ldap-sync:ldap-sync-sa
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="c1"># Lista i gruppi sincronizzati</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>oc<span class="w"> </span>get<span class="w"> </span>groups
 </span></code></pre></div>
 <hr />
 <h3 id="scenario-4-scc-custom-non-viene-applicata-al-pod">Scenario 4 — SCC custom non viene applicata al pod<a class="headerlink" href="#scenario-4-scc-custom-non-viene-applicata-al-pod" title="Permanent link">&para;</a></h3>
@@ -25111,9 +25142,9 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Verifica quale SCC usa il pod in esecuzione</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>oc<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>my-pod<span class="w"> </span>-o<span class="w"> </span>yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'openshift.io/scc'</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Lista SCC assegnate a un ServiceAccount con priorità</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Quale SCC ammetterebbe il pod con quel ServiceAccount</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>oc<span class="w"> </span>adm<span class="w"> </span>policy<span class="w"> </span>scc-subject-review<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span>-z<span class="w"> </span>my-service-account<span class="w"> </span>-n<span class="w"> </span>my-namespace<span class="w"> </span>-f<span class="w"> </span>pod.yaml
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="c1"># Verifica la priority della SCC custom</span>
 </span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>oc<span class="w"> </span>get<span class="w"> </span>scc<span class="w"> </span>myapp-scc<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.priority}'</span>
