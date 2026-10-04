@@ -7,9 +7,10 @@ search_keywords: [kafka helm chart, bitnami kafka, helm install kafka, kafka kub
 parent: messaging/kafka/kubernetes-cloud
 related: [messaging/kafka/kubernetes-cloud/strimzi-operator, messaging/kafka/kubernetes-cloud/msk-aws, messaging/kafka/fondamenti/architettura]
 official_docs: https://artifacthub.io/packages/helm/bitnami/kafka
-status: complete
+status: needs-review
 difficulty: advanced
-last_updated: 2026-03-29
+last_updated: 2026-10-04
+last_verified: 2026-10-04
 ---
 
 # Kafka con Helm
@@ -17,6 +18,12 @@ last_updated: 2026-03-29
 ## Panoramica
 
 Helm è il package manager de facto per Kubernetes e permette di installare Kafka tramite chart preconfigurati, gestendo template di risorse Kubernetes complessi con valori personalizzabili. Il chart Bitnami Kafka è il più utilizzato per deploy Kafka su Kubernetes: mantiene aggiornato alle ultime versioni di Kafka, supporta sia la modalità KRaft (senza ZooKeeper) sia quella legacy con ZooKeeper, e offre un ampio set di parametri di configurazione. Rispetto all'approccio Strimzi Operator, Helm è più semplice da adottare inizialmente ma offre meno automazione operativa: rolling update, gestione utenti e rinnovo certificati richiedono più intervento manuale. Helm è indicato per ambienti di sviluppo, staging e produzione di media complessità dove non si vuole introdurre la dipendenza da un Operator.
+
+!!! warning "Catalogo Bitnami: cambio di distribuzione (2025)"
+    Da agosto-settembre 2025 Broadcom ha ristrutturato il catalogo Bitnami: le immagini gratuite versionate sono state spostate in `docker.io/bitnamilegacy` (congelate, senza aggiornamenti di sicurezza) e i tag aggiornati sono riservati a **Bitnami Secure Images** (a pagamento). Chart e immagini referenziati come `bitnami/kafka` possono quindi fallire con `ImagePullBackOff` o fermarsi a versioni non patchate. Per produzione: usare immagini Kafka ufficiali (`apache/kafka`) con un proprio chart/manifest, sottoscrivere Secure Images, oppure adottare Strimzi (immagini e release open source mantenute). <!-- REVIEW: verificare stato attuale dei repo charts.bitnami.com / oci://registry-1.docker.io/bitnamicharts e dei tag gratuiti -->
+
+!!! warning "Schema dei values dipendente dalla versione del chart"
+    Dal chart 30.x (Kafka 3.9) ZooKeeper e il flag `kraft.enabled` sono stati rimossi: il chart è solo KRaft e i parametri sono suddivisi per ruolo (`controller.replicaCount`, `broker.replicaCount`, `controller.persistence.size`, `controller.resources`, `controller.heapOpts`, `externalAccess.controller.*`). Gli esempi sotto usano lo schema storico top-level (`replicaCount`, `persistence`, `resources`): con chart recenti vanno adattati. Verificare sempre con `helm show values bitnami/kafka --version <X>`. <!-- REVIEW: riscrivere values.yaml di produzione secondo lo schema controller/broker del chart corrente -->
 
 !!! note "Helm vs Strimzi Operator"
     Per ambienti di produzione con requisiti stringenti di alta disponibilità e gestione automatizzata del ciclo di vita, valutare Strimzi Operator. Helm è ottimo per setup più semplici o quando si preferisce un approccio più controllato agli aggiornamenti.
@@ -215,7 +222,7 @@ externalAccess:
     image:
       registry: docker.io
       repository: bitnami/kubectl
-      tag: latest
+      tag: "1.31"  # pinnare alla versione kubectl del cluster; mai `latest`
 
 # Probe configuration
 livenessProbe:
@@ -367,7 +374,8 @@ kafka-console-producer.sh \
 - **Usare sempre un `values.yaml` versionato**: Non passare valori solo via `--set`. Il file `values.yaml` deve essere committato in Git e trattato come codice.
 - **Separare le password dal values.yaml**: Usare `--set` per le password in fase di install/upgrade, oppure referenziare Secret Kubernetes esistenti.
 - **Testare upgrade in staging**: Il chart Bitnami rilascia breaking changes nelle major version. Leggere sempre il CHANGELOG prima di upgrading.
-- **KRaft in produzione**: Abilitare sempre `kraft.enabled=true` per nuovi cluster. ZooKeeper è deprecato.
+- **KRaft in produzione**: Con chart < 30 abilitare `kraft.enabled=true`; con chart ≥ 30 KRaft è l'unica modalità. ZooKeeper è rimosso da Kafka 4.0 (marzo 2025), quindi nuovi cluster vanno solo in KRaft.
+- **Pinnare chart e immagini**: `--version` esplicito e tag immagine fissi (mai `latest`) per upgrade riproducibili.
 - **Disabilitare `auto.create.topics.enable`**: In produzione i topic devono essere creati esplicitamente tramite provisioning o IaC.
 - **Monitorare le `ServiceMonitor`**: Abilitare `metrics.kafka.serviceMonitor.enabled=true` per l'integrazione con Prometheus Operator.
 - **Non usare Helm per gestire i topic dopo il deploy**: Usare invece gli script Kafka CLI, Terraform o Strimzi KafkaTopic CR se si migra a Strimzi.
