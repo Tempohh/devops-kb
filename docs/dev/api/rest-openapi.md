@@ -7,9 +7,10 @@ search_keywords: [rest api, restful api, openapi, openapi 3, openapi 3.1, swagge
 parent: dev/api/_index
 related: [dev/api/_index, dev/resilienza/_index, dev/sicurezza/tls-da-codice, security/_index]
 official_docs: https://spec.openapis.org/oas/v3.1.0
-status: complete
+status: needs-review
 difficulty: intermediate
 last_updated: 2026-04-04
+last_verified: 2026-10-04
 ---
 
 # REST API Design & OpenAPI 3.x
@@ -18,7 +19,7 @@ last_updated: 2026-04-04
 
 REST (Representational State Transfer) è un'architettura per sistemi distribuiti basata su HTTP. Non è un protocollo né uno standard formale: è un insieme di vincoli architetturali che, se rispettati, producono API uniformi, scalabili e manutenibili nel tempo.
 
-**OpenAPI Specification (OAS)** — precedentemente nota come Swagger — è il formato standard de-facto per descrivere, documentare e validare REST API. La versione 3.1 allinea lo schema a JSON Schema 2020-12 e aggiunge il supporto a webhook e `pathItems` riusabili.
+**OpenAPI Specification (OAS)** — precedentemente nota come Swagger — è il formato standard de-facto per descrivere, documentare e validare REST API. La versione 3.1 allinea lo schema a JSON Schema 2020-12 e aggiunge il supporto a webhook e `pathItems` riusabili. Esistono versioni successive (3.1.1 patch di chiarimento, 3.2 con novità come il metodo `QUERY` e tag gerarchici) <!-- REVIEW: verificare feature OAS 3.2 e supporto tooling (Spectral, Redocly, generator) --> ma il tooling è più maturo su 3.0/3.1: gli esempi qui usano 3.1.
 
 Questa guida copre il design operativo di REST API e la scrittura di spec OpenAPI 3.x production-ready: si concentra su convenzioni pratiche, errori comuni, e tooling — il complemento operativo all'overview in [API Design](_index.md).
 
@@ -160,7 +161,7 @@ GET /v1/products?q=laptop&category=electronics
 
 ### Error Response — RFC 7807 Problem Details
 
-Lo standard RFC 7807 (Problem Details for HTTP APIs) definisce un formato JSON uniforme per gli errori:
+Lo standard RFC 9457 (Problem Details for HTTP APIs, che ha reso obsoleto RFC 7807 nel 2023 mantenendo lo stesso formato) definisce un JSON uniforme per gli errori, con media type `application/problem+json`. Perché: i client possono gestire gli errori in modo generico (`type` è l'identificatore stabile, `title`/`detail` sono per l'umano) invece di parsare formati ad hoc per ogni API. I campi extra (`errors`, `traceId`) sono ammessi come estensioni:
 
 ```json
 {
@@ -382,7 +383,6 @@ components:
           enum: [pending, confirmed, shipped, delivered, cancelled]
         total:
           type: number
-          format: decimal
           minimum: 0
         createdAt:
           type: string
@@ -404,8 +404,7 @@ components:
           type: integer
           minimum: 1
         price:
-          type: number
-          format: decimal
+          type: number   # per importi esatti valutare string + pattern o interi in centesimi (evita errori float)
 
     OrderList:
       type: object
@@ -422,8 +421,7 @@ components:
       type: object
       properties:
         cursor:
-          type: string
-          nullable: true
+          type: [string, "null"]   # 3.1: nullable è rimosso, si usa il type array
         hasMore:
           type: boolean
         limit:
@@ -536,7 +534,9 @@ GET /orders?api-version=2026-01-01
 # Header di deprecation — da includere nelle risposte v1 dopo il rilascio di v2
 HTTP/1.1 200 OK
 Content-Type: application/json
-Deprecation: true
+# RFC 9745: Deprecation è una data (Structured Field, epoch secondi) = quando è diventata deprecata
+Deprecation: @1767225599
+# RFC 8594: Sunset = quando la risorsa smette di rispondere
 Sunset: Sat, 31 Dec 2026 23:59:59 GMT
 Link: <https://api.example.com/v2/orders>; rel="successor-version"
 Link: <https://docs.example.com/migration/v1-to-v2>; rel="deprecation"
@@ -578,18 +578,19 @@ HTTP/1.1 412 Precondition Failed
 ```http
 # Il client genera un UUID prima della richiesta
 POST /v1/orders
-Idempotency-Key: 7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5g6h
+Idempotency-Key: 7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5a6b
 Content-Type: application/json
 
 { "items": [...], "shippingAddressId": "abc-123" }
 
 # Prima chiamata: ordine creato
 HTTP/1.1 201 Created
-Idempotency-Key: 7f3e2a1b-9d4c-4e8f-b6a0-1c2d3e4f5g6h
 
 # Seconda chiamata con stesso Idempotency-Key (dopo timeout/retry)
-HTTP/1.1 200 OK   ← stessa risposta della prima, nessun secondo ordine creato
+HTTP/1.1 201 Created   ← replay della risposta salvata, nessun secondo ordine creato
 ```
+
+`Idempotency-Key` non è ancora un RFC: è un draft IETF (`draft-ietf-httpapi-idempotency-key-header`), già adottato de-facto (Stripe, Adyen). Stesso key con body diverso → rispondere `422`; richiesta ancora in corso → `409`.
 
 !!! tip "Implementazione server-side"
     Storare la coppia `(idempotency_key, user_id) → response` in Redis con TTL 24h. Prima di processare: controllare se esiste. Questo previene double-charge in e-commerce e double-insert in generale.
@@ -618,7 +619,7 @@ npx @stoplight/prism-cli mock openapi.yaml --port 4010
 # curl http://localhost:4010/v1/orders → risposta da example o schema faker
 
 # Rilevamento breaking changes tra versioni (usare in CI)
-oasdiff breaking openapi-v1.yaml openapi-v2.yaml --fail-on ERR
+docker run --rm -v "$(pwd)":/specs:ro tufin/oasdiff breaking /specs/openapi-v1.yaml /specs/openapi-v2.yaml --fail-on ERR
 
 # Generazione client SDK (40+ linguaggi)
 docker run --rm -v $(pwd):/out openapitools/openapi-generator-cli generate \
@@ -676,7 +677,8 @@ rules:
 **Soluzione:**
 ```bash
 # Decodificare il JWT (senza verificare firma) per ispezionare claim
-echo "eyJhbGc..." | cut -d. -f2 | base64 -d | jq .
+# (JWT usa base64url: se base64 -d fallisce, sostituire -_ con +/ e aggiungere padding)
+echo "eyJhbGc..." | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq .
 # Verificare: exp (scadenza), iss (issuer), aud (audience)
 
 # Testare la validazione del token direttamente
@@ -719,10 +721,10 @@ curl -v -X OPTIONS https://api.example.com/v1/orders \
 # Validare la spec prima di avviare il mock
 npx @stoplight/spectral-cli lint openapi.yaml
 
-# Avviare Prism in modalità verbose per vedere gli errori
+# --errors: Prism risponde con errore (es. 422) su richieste non conformi alla spec
 npx @stoplight/prism-cli mock openapi.yaml --port 4010 --errors
 
-# Forzare Prism a usare esempi invece di generare dal schema
+# Default: usa gli `example` della spec. -d/--dynamic genera invece dati fake dallo schema
 npx @stoplight/prism-cli mock openapi.yaml --port 4010 -d
 ```
 
@@ -750,7 +752,8 @@ jobs:
         run: |
           # Confronta spec corrente con quella su main
           git show origin/main:openapi.yaml > openapi-main.yaml
-          npx oasdiff breaking openapi-main.yaml openapi.yaml --fail-on ERR
+          docker run --rm -v "$PWD":/specs:ro tufin/oasdiff \
+            breaking /specs/openapi-main.yaml /specs/openapi.yaml --fail-on ERR
 ```
 
 ---
@@ -795,12 +798,13 @@ curl -v https://api.example.com/v1/orders \
 ## Riferimenti
 
 - [OpenAPI Specification 3.1](https://spec.openapis.org/oas/v3.1.0) — Specifica ufficiale OAS 3.1
-- [RFC 7807 — Problem Details](https://www.rfc-editor.org/rfc/rfc7807) — Standard error response HTTP
+- [RFC 9457 — Problem Details](https://www.rfc-editor.org/rfc/rfc9457) — Standard error response HTTP (obsoleta RFC 7807)
+- [RFC 9745 — Deprecation Header](https://www.rfc-editor.org/rfc/rfc9745) e [RFC 8594 — Sunset Header](https://www.rfc-editor.org/rfc/rfc8594)
 - [RFC 8288 — Web Linking](https://www.rfc-editor.org/rfc/rfc8288) — Standard `Link` header per paginazione e HATEOAS
 - [Google API Design Guide](https://cloud.google.com/apis/design) — Best practice da Google per REST API
 - [Microsoft REST API Guidelines](https://github.com/microsoft/api-guidelines) — Linee guida REST complete con versioning e error handling
 - [Stoplight Spectral](https://stoplight.io/open-source/spectral) — OpenAPI linter con regole customizzabili
 - [Prism Mock Server](https://stoplight.io/open-source/prism) — Mock server da spec OpenAPI
-- [oasdiff](https://github.com/Tufin/oasdiff) — Rilevamento breaking changes OpenAPI da CLI e CI
+- [oasdiff](https://github.com/oasdiff/oasdiff) — Rilevamento breaking changes OpenAPI da CLI e CI
 - [openapi-generator](https://openapi-generator.tech/) — Generazione client/server stub da OpenAPI spec
 - [Redocly CLI](https://redocly.com/docs/cli/) — Preview docs, linting, bundling OpenAPI
